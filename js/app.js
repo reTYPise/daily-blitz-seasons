@@ -1,6 +1,7 @@
 'use strict';
 
-const STORAGE_KEY = 'math-blitz-date-v1';
+const STORAGE_KEY = 'daily-blitz-seasons-v1';
+const LEGACY_STORAGE_KEY = 'math-blitz-date-v1';
 const ALL_OPS = ['×', '÷', '+', '−'];
 
 const SEASONS = {
@@ -137,7 +138,14 @@ function playTimeUp() {
 // ── DATE & STORAGE ──
 function loadPersistedData() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (raw) {
+        localStorage.setItem(STORAGE_KEY, raw);
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
+      }
+    }
     if (!raw) return { sessions: [] };
     const parsed = JSON.parse(raw);
     return { sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [] };
