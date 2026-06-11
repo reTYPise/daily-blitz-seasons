@@ -7,6 +7,7 @@ const AppDB = (() => {
   let sqlModule = null;
   let db = null;
   let ready = false;
+  let currentUser = null;
 
   function persist() {
     if (!db) return;
@@ -26,6 +27,25 @@ const AppDB = (() => {
     return bytes;
   }
 
+  function queryAll(sql, params = []) {
+    const stmt = db.prepare(sql);
+    stmt.bind(params);
+    const rows = [];
+    while (stmt.step()) rows.push(stmt.getAsObject());
+    stmt.free();
+    return rows;
+  }
+
+  function queryOne(sql, params = []) {
+    const rows = queryAll(sql, params);
+    return rows[0] || null;
+  }
+
+  function hasColumn(table, column) {
+    const cols = queryAll(`PRAGMA table_info(${table})`);
+    return cols.some(c => c.name === column);
+  }
+
   function migrateLegacyJson() {
     for (const key of LEGACY_JSON_KEYS) {
       const raw = localStorage.getItem(key);
@@ -35,8 +55,8 @@ const AppDB = (() => {
         if (!Array.isArray(parsed.sessions)) continue;
         parsed.sessions.forEach(s => {
           db.run(
-            `INSERT INTO sessions (date, timestamp, trainer, game_mode, correct, wrong, answered, best_streak, elapsed_sec)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO sessions (date, timestamp, trainer, game_mode, correct, wrong, answered, best_streak, elapsed_sec, username)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               s.date || '',
               s.timestamp || Date.now(),
@@ -46,7 +66,8 @@ const AppDB = (() => {
               s.wrong || 0,
               s.answered || 0,
               s.bestStreak || 0,
-              s.elapsedSec || 0
+              s.elapsedSec || 0,
+              'guest'
             ]
           );
         });
@@ -54,6 +75,32 @@ const AppDB = (() => {
         localStorage.removeItem(key);
       } catch (e) {}
     }
+  }
+
+  function migrateUserSchema() {
+    if (!hasColumn('sessions', 'username')) {
+      db.run(`ALTER TABLE sessions ADD COLUMN username TEXT NOT NULL DEFAULT ''`);
+      db.run(`UPDATE sessions SET username = 'guest' WHERE username = ''`);
+      persist();
+    }
+    db.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        created_at INTEGER NOT NULL,
+        password_hash TEXT,
+        session_token TEXT
+      )
+    `);
+    if (!hasColumn('users', 'password_hash')) {
+      db.run(`ALTER TABLE users ADD COLUMN password_hash TEXT`);
+      persist();
+    }
+    if (!hasColumn('users', 'session_token')) {
+      db.run(`ALTER TABLE users ADD COLUMN session_token TEXT`);
+      persist();
+    }
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_user_date ON sessions(username, date)`);
   }
 
   function initSchema() {
@@ -68,11 +115,87 @@ const AppDB = (() => {
         wrong INTEGER NOT NULL DEFAULT 0,
         answered INTEGER NOT NULL DEFAULT 0,
         best_streak INTEGER NOT NULL DEFAULT 0,
-        elapsed_sec REAL NOT NULL DEFAULT 0
+        elapsed_sec REAL NOT NULL DEFAULT 0,
+        username TEXT NOT NULL DEFAULT ''
       )
     `);
     db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_trainer ON sessions(trainer)`);
+    migrateUserSchema();
+  }
+
+  function setCurrentUser(username) {
+    currentUser = username || null;
+  }
+
+  function getCurrentUser() {
+    return currentUser;
+  }
+
+  function requireUser() {
+    if (!currentUser) throw new Error('User not logged in');
+  }
+
+  function issueSession(username) {
+    const token = Auth.generateSessionToken();
+    db.run(`UPDATE users SET session_token = ? WHERE username = ?`, [token, username]);
+    persist();
+    return token;
+  }
+
+  function loginWithPassword(username, passwordHash) {
+    const existing = queryOne(
+      `SELECT username, password_hash FROM users WHERE username = ?`,
+      [username]
+    );
+
+    if (!existing) {
+      const token = Auth.generateSessionToken();
+      db.run(
+        `INSERT INTO users (username, created_at, password_hash, session_token) VALUES (?, ?, ?, ?)`,
+        [username, Date.now(), passwordHash, token]
+      );
+      persist();
+      currentUser = username;
+      return { ok: true, token, isNew: true };
+    }
+
+    if (!existing.password_hash) {
+      const token = Auth.generateSessionToken();
+      db.run(
+        `UPDATE users SET password_hash = ?, session_token = ? WHERE username = ?`,
+        [passwordHash, token, username]
+      );
+      persist();
+      currentUser = username;
+      return { ok: true, token, isNew: false, migrated: true };
+    }
+
+    if (existing.password_hash !== passwordHash) {
+      return { ok: false, error: 'Неверный пароль' };
+    }
+
+    const token = issueSession(username);
+    currentUser = username;
+    return { ok: true, token, isNew: false };
+  }
+
+  function restoreSession(username, token) {
+    const row = queryOne(
+      `SELECT session_token FROM users WHERE username = ?`,
+      [username]
+    );
+    if (!row?.session_token || row.session_token !== token) return false;
+    currentUser = username;
+    return true;
+  }
+
+  function logout() {
+    if (currentUser) {
+      db.run(`UPDATE users SET session_token = NULL WHERE username = ?`, [currentUser]);
+      persist();
+    }
+    currentUser = null;
   }
 
   function assetPath(relativePath) {
@@ -98,9 +221,10 @@ const AppDB = (() => {
   }
 
   function recordSession(session) {
+    requireUser();
     db.run(
-      `INSERT INTO sessions (date, timestamp, trainer, game_mode, correct, wrong, answered, best_streak, elapsed_sec)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sessions (date, timestamp, trainer, game_mode, correct, wrong, answered, best_streak, elapsed_sec, username)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         session.date,
         session.timestamp || Date.now(),
@@ -110,29 +234,19 @@ const AppDB = (() => {
         session.wrong,
         session.answered,
         session.bestStreak,
-        session.elapsedSec
+        session.elapsedSec,
+        currentUser
       ]
     );
     persist();
   }
 
-  function queryAll(sql, params = []) {
-    const stmt = db.prepare(sql);
-    stmt.bind(params);
-    const rows = [];
-    while (stmt.step()) rows.push(stmt.getAsObject());
-    stmt.free();
-    return rows;
-  }
-
-  function queryOne(sql, params = []) {
-    const rows = queryAll(sql, params);
-    return rows[0] || null;
-  }
-
   function getPracticeDates() {
-    return queryAll(`SELECT DISTINCT date FROM sessions WHERE date != '' ORDER BY date DESC`)
-      .map(r => r.date);
+    requireUser();
+    return queryAll(
+      `SELECT DISTINCT date FROM sessions WHERE username = ? AND date != '' ORDER BY date DESC`,
+      [currentUser]
+    ).map(r => r.date);
   }
 
   function calculateDailyStreak(referenceDate = new Date()) {
@@ -150,18 +264,27 @@ const AppDB = (() => {
   }
 
   function hasSessionToday(date = new Date()) {
+    requireUser();
     const key = formatDateKey(date);
-    const row = queryOne(`SELECT COUNT(*) AS c FROM sessions WHERE date = ?`, [key]);
+    const row = queryOne(
+      `SELECT COUNT(*) AS c FROM sessions WHERE username = ? AND date = ?`,
+      [currentUser, key]
+    );
     return (row?.c || 0) > 0;
   }
 
   function getTodaySessionsCount(date = new Date()) {
+    requireUser();
     const key = formatDateKey(date);
-    const row = queryOne(`SELECT COUNT(*) AS c FROM sessions WHERE date = ?`, [key]);
+    const row = queryOne(
+      `SELECT COUNT(*) AS c FROM sessions WHERE username = ? AND date = ?`,
+      [currentUser, key]
+    );
     return row?.c || 0;
   }
 
   function getOverallStats(date = new Date()) {
+    requireUser();
     const totals = queryOne(`
       SELECT
         COUNT(*) AS total_sessions,
@@ -169,9 +292,13 @@ const AppDB = (() => {
         COALESCE(SUM(answered), 0) AS total_answered,
         COALESCE(MAX(best_streak), 0) AS max_streak
       FROM sessions
-    `);
+      WHERE username = ?
+    `, [currentUser]);
     const todayKey = formatDateKey(date);
-    const todayRow = queryOne(`SELECT COUNT(*) AS c FROM sessions WHERE date = ?`, [todayKey]);
+    const todayRow = queryOne(
+      `SELECT COUNT(*) AS c FROM sessions WHERE username = ? AND date = ?`,
+      [currentUser, todayKey]
+    );
     const totalAnswered = totals?.total_answered || 0;
     const totalCorrect = totals?.total_correct || 0;
     return {
@@ -186,6 +313,7 @@ const AppDB = (() => {
   }
 
   function getTrainerBreakdown() {
+    requireUser();
     return queryAll(`
       SELECT
         trainer,
@@ -193,9 +321,10 @@ const AppDB = (() => {
         COALESCE(SUM(correct), 0) AS correct,
         COALESCE(SUM(answered), 0) AS answered
       FROM sessions
+      WHERE username = ?
       GROUP BY trainer
       ORDER BY sessions DESC
-    `).map(row => ({
+    `, [currentUser]).map(row => ({
       trainer: row.trainer,
       sessions: row.sessions,
       accuracy: row.answered > 0 ? Math.round((row.correct / row.answered) * 100) : 0
@@ -203,15 +332,18 @@ const AppDB = (() => {
   }
 
   function getRecentSessions(limit = 6) {
+    requireUser();
     return queryAll(`
       SELECT date, trainer, game_mode, correct, wrong, answered, best_streak, elapsed_sec, timestamp
       FROM sessions
+      WHERE username = ?
       ORDER BY timestamp DESC
       LIMIT ?
-    `, [limit]);
+    `, [currentUser, limit]);
   }
 
   function getWeeklyActivity(date = new Date()) {
+    requireUser();
     const days = [];
     const cursor = new Date(date);
     cursor.setHours(0, 0, 0, 0);
@@ -219,7 +351,10 @@ const AppDB = (() => {
       const d = new Date(cursor);
       d.setDate(cursor.getDate() - i);
       const key = formatDateKey(d);
-      const row = queryOne(`SELECT COUNT(*) AS c FROM sessions WHERE date = ?`, [key]);
+      const row = queryOne(
+        `SELECT COUNT(*) AS c FROM sessions WHERE username = ? AND date = ?`,
+        [currentUser, key]
+      );
       days.push({ date: key, count: row?.c || 0, weekday: d.getDay() });
     }
     return days;
@@ -228,6 +363,11 @@ const AppDB = (() => {
   return {
     init,
     formatDateKey,
+    setCurrentUser,
+    getCurrentUser,
+    loginWithPassword,
+    restoreSession,
+    logout,
     recordSession,
     getPracticeDates,
     calculateDailyStreak,
