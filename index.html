@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="daily-blitz-seasons — тренажёр кварталов и сезонов с дашбордом прогресса.">
 <title>daily-blitz-seasons — кварталы и сезоны</title>
+<script>
+(function () {
+  var path = location.pathname;
+  var base = path.endsWith('/')
+    ? path
+    : (/\.[a-z0-9]+$/i.test(path.split('/').pop())
+      ? path.slice(0, path.lastIndexOf('/') + 1)
+      : path + '/');
+  var el = document.createElement('base');
+  el.href = base;
+  document.head.appendChild(el);
+  window.APP_BASE_PATH = base;
+})();
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
 <link rel="stylesheet" href="css/styles.css">
 </head>

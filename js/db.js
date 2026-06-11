@@ -75,9 +75,14 @@ const AppDB = (() => {
     db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_trainer ON sessions(trainer)`);
   }
 
+  function assetPath(relativePath) {
+    const base = window.APP_BASE_PATH || '/';
+    return `${base}${relativePath}`.replace(/\/{2,}/g, '/');
+  }
+
   async function init() {
     if (ready) return;
-    sqlModule = await initSqlJs({ locateFile: file => `js/vendor/${file}` });
+    sqlModule = await initSqlJs({ locateFile: file => assetPath(`js/vendor/${file}`) });
     const saved = loadFromStorage();
     db = saved ? new sqlModule.Database(saved) : new sqlModule.Database();
     initSchema();
