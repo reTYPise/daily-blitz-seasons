@@ -12,7 +12,7 @@
   --accent3: #2ed573;
   --accent4: #ff9f43;
   --text: #f0f0f5;
-  --muted: #555568;
+  --muted: #9a9aad;
   --mono: 'Space Mono', monospace;
   --sans: 'Syne', sans-serif;
   --season-accent: var(--accent);
@@ -84,9 +84,9 @@ html, body {
 .dash-training { grid-column: span 12; }
 
 /* ── TODAY ── */
-.today-block { position: relative; overflow: visible; }
+.today-block { position: relative; overflow: hidden; }
 .today-block::before {
-  content: ''; position: absolute; top: -18px; left: -18px; right: -18px; height: 3px;
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
   background: var(--season-accent);
 }
 .today-date-head {
@@ -201,7 +201,7 @@ html, body {
 .trainer-btn:hover { border-color: var(--muted); }
 .trainer-btn.selected { border-color: var(--accent); background: rgba(232,255,71,0.06); }
 .trainer-icon { grid-row: 1 / 3; font-size: 1.3rem; }
-.trainer-name { font-weight: 700; font-size: 0.88rem; }
+.trainer-name { font-family: var(--sans); font-weight: 700; font-size: 0.88rem; }
 .trainer-sub { font-family: var(--mono); font-size: 0.58rem; color: var(--muted); grid-column: 2; }
 .trainer-btn.selected .trainer-sub { color: rgba(232,255,71,0.55); }
 
@@ -255,6 +255,9 @@ html, body {
 .game-header {
   display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 10px; gap: 10px; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 6;
+  background: var(--bg); padding: 10px 0 12px;
+  border-bottom: 1px solid var(--border);
 }
 .trainer-label { font-family: var(--mono); font-size: 0.72rem; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
 .game-header-right { display: flex; gap: 10px; align-items: center; }
@@ -262,7 +265,8 @@ html, body {
 .hud-stats span { color: var(--accent); }
 .quit-btn {
   background: none; border: 1px solid var(--border); color: var(--muted);
-  font-family: var(--mono); font-size: 0.7rem; padding: 5px 12px; cursor: pointer;
+  font-family: var(--mono); font-size: 0.7rem; padding: 8px 14px; cursor: pointer;
+  flex-shrink: 0; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
 .quit-btn:hover { border-color: var(--accent2); color: var(--accent2); }
 
@@ -380,11 +384,14 @@ html, body {
 
 @media (max-width: 640px) {
   .app-header, .dashboard { padding-left: 16px; padding-right: 16px; }
+  #screen-game { padding: 0 16px 24px; }
   .trainer-grid { grid-template-columns: 1fr; }
   .settings-grid { grid-template-columns: 1fr; }
   .year-calendar { grid-template-columns: repeat(4, 1fr); }
   .choices-grid { grid-template-columns: 1fr; }
   .game-shell { grid-template-columns: 1fr; }
+  .game-header { margin: 0 -16px 10px; padding: 12px 16px; }
+  .quit-btn { min-height: 44px; min-width: 44px; font-size: 0.75rem; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .recent-row { grid-template-columns: 1fr; gap: 4px; }
 }

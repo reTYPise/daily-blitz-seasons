@@ -9,12 +9,16 @@ const MONTHS_GEN = [
   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
 ];
 const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const MONTHS_PREP = [
+  'январе', 'феврале', 'марте', 'апреле', 'мае', 'июне',
+  'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре'
+];
 
 const SEASONS = {
-  winter: { key: 'winter', name: 'Зима', icon: '❄️', accent: '#7ec8ff', months: [11, 0, 1], label: 'декабрь — февраль' },
-  spring: { key: 'spring', name: 'Весна', icon: '🌸', accent: '#ff8ec7', months: [2, 3, 4], label: 'март — май' },
-  summer: { key: 'summer', name: 'Лето', icon: '☀️', accent: '#ffd166', months: [5, 6, 7], label: 'июнь — август' },
-  autumn: { key: 'autumn', name: 'Осень', icon: '🍂', accent: '#ff9f43', months: [8, 9, 10], label: 'сентябрь — ноябрь' }
+  winter: { key: 'winter', name: 'Зима', icon: '❄️', accent: '#7ec8ff', months: [11, 0, 1], label: 'декабрь — февраль', dative: 'зиме', accusative: 'зиму' },
+  spring: { key: 'spring', name: 'Весна', icon: '🌸', accent: '#ff8ec7', months: [2, 3, 4], label: 'март — май', dative: 'весне', accusative: 'весну' },
+  summer: { key: 'summer', name: 'Лето', icon: '☀️', accent: '#ffd166', months: [5, 6, 7], label: 'июнь — август', dative: 'лету', accusative: 'лето' },
+  autumn: { key: 'autumn', name: 'Осень', icon: '🍂', accent: '#ff9f43', months: [8, 9, 10], label: 'сентябрь — ноябрь', dative: 'осени', accusative: 'осень' }
 };
 const SEASON_LIST = Object.values(SEASONS);
 
@@ -429,7 +433,7 @@ function genMonthToSeason() {
     key: `mts-${month}`,
     domain: 'seasons',
     context: '',
-    prompt: `Какой сезон у ${MONTHS_NOM[month]}?`,
+    prompt: `Какой сезон у ${MONTHS_GEN[month]}?`,
     answer: season.name,
     choices,
     highlight: { month, seasonKey: season.key }
@@ -449,7 +453,7 @@ function genSeasonPickMonth() {
     key: `spm-${season.key}-${correct}`,
     domain: 'seasons',
     context: '',
-    prompt: `Какой месяц относится к ${season.name.toLowerCase()}?`,
+    prompt: `Какой месяц относится к ${season.dative}?`,
     answer: MONTHS_NOM[correct],
     choices,
     highlight: { month: correct, seasonKey: season.key }
@@ -469,7 +473,7 @@ function genMonthsInSeason() {
     key: `mis-${season.key}`,
     domain: 'seasons',
     context: '',
-    prompt: `Какие месяцы входят в ${season.name.toLowerCase()}?`,
+    prompt: `Какие месяцы входят в ${season.accusative}?`,
     answer: correct,
     choices,
     highlight: { seasonKey: season.key }
@@ -484,7 +488,7 @@ function genContextSeason() {
   return {
     key: `ctxs-${season.key}`,
     domain: 'seasons',
-    context: phrase.template.replace('{season}', season.name.toLowerCase()),
+    context: phrase.template.replace('{season}', season.accusative),
     prompt: 'Это какие месяцы?',
     answer: season.label,
     choices,
@@ -502,7 +506,7 @@ function genMonthToQuarter() {
     key: `mtq-${month}`,
     domain: 'quarters',
     context: '',
-    prompt: `В каком квартале ${MONTHS_NOM[month]}?`,
+    prompt: `В каком квартале ${MONTHS_PREP[month]}?`,
     answer: correct,
     choices,
     highlight: { month, quarterNum: qNum }
@@ -631,6 +635,7 @@ function startGame() {
 
   document.getElementById('trainer-label').textContent = trainerLabel(selectedTrainer);
   showScreen('game');
+  window.scrollTo(0, 0);
   renderReferencePanel();
   setupTimer();
   nextQuestion();
@@ -805,6 +810,13 @@ function handleFastGameButtonPress(event) {
   }
 }
 
+function handleQuitPress(event) {
+  if (event.type === 'mousedown' && window.PointerEvent) return;
+  if (event.button !== 0) return;
+  event.preventDefault();
+  quitGame();
+}
+
 function showFlash(cls) {
   const f = document.getElementById('flash');
   f.className = 'flash ' + cls + ' visible';
@@ -891,7 +903,10 @@ function bindEvents() {
   });
   document.getElementById('start-btn').addEventListener('click', startGame);
   document.getElementById('today-start-btn').addEventListener('click', startTodayTraining);
-  document.getElementById('quit-btn').addEventListener('click', quitGame);
+  const quitBtn = document.getElementById('quit-btn');
+  quitBtn.addEventListener('pointerdown', handleQuitPress);
+  quitBtn.addEventListener('mousedown', handleQuitPress);
+  quitBtn.addEventListener('click', quitGame);
   document.getElementById('menu-btn').addEventListener('click', goMenu);
   document.getElementById('restart-btn').addEventListener('click', restartGame);
 
