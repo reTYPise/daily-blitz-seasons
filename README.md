@@ -1,44 +1,21 @@
 # daily-blitz-seasons
 
-Тренажёр кварталов и сезонов с дашбордом прогресса. Полностью статический сайт — работает на бесплатном [GitHub Pages](https://pages.github.com/).
+Тренажёр кварталов и сезонов с дашбордом прогресса. Статический сайт на GitHub Pages.
 
 **Сайт:** https://retypise.github.io/daily-blitz-seasons/
 
-## Как это устроено
+## Структура
 
-| Что | Где |
-|-----|-----|
-| Страница | `index.html` в корне репозитория |
-| Стили | `css/styles.css` |
-| Логика | `js/app.js` |
-| База данных | `js/db.js` + sql.js (`js/vendor/`) |
-| Статистика | SQLite в браузере → `localStorage` (ключ `daily-blitz-seasons-sqlite-v1`) |
+| Файл | Назначение |
+|------|------------|
+| `index.html` | Разметка: дашборд, игра, экран счёта |
+| `css/styles.css` | Стили, mobile-first, ширина до 1240px |
+| `js/app.js` | Игра, вопросы, UI |
+| `js/db.js` | SQLite (sql.js) → `localStorage` |
+| `js/vendor/` | sql-wasm.js + sql-wasm.wasm |
+| `agents.md` | Контекст для AI-агентов |
 
-Отдельный сервер и файла БД на диске не нужны: база создаётся автоматически при первом открытии сайта у каждого пользователя в его браузере.
-
-## Бесплатный хостинг на GitHub Pages
-
-### Вариант A — через Actions (рекомендуется)
-
-1. Запушьте репозиторий на GitHub.
-2. **Settings → Pages → Build and deployment**
-3. **Source:** `GitHub Actions`
-4. При пуше в `main` workflow `.github/workflows/pages.yml` сам опубликует сайт.
-
-### Вариант B — напрямую из ветки
-
-1. **Settings → Pages**
-2. **Source:** `Deploy from a branch`
-3. **Branch:** `main` → папка `/ (root)`
-4. Сохранить — через 1–2 минуты сайт будет доступен.
-
-### URL сайта
-
-Для репозитория `username/daily-blitz-seasons`:
-
-```
-https://username.github.io/daily-blitz-seasons/
-```
+База создаётся в браузере каждого пользователя (ключ `daily-blitz-seasons-sqlite-v1`). Сервер не нужен.
 
 ## Локальный запуск
 
@@ -46,22 +23,13 @@ https://username.github.io/daily-blitz-seasons/
 npx serve -l 3000
 ```
 
-Откройте http://localhost:3000
+## GitHub Pages
 
-## Файлы для деплоя
+1. **Settings → Pages → Source:** GitHub Actions (или branch `main`, folder `/`)
+2. Пуш в `main` — workflow `.github/workflows/pages.yml` публикует сайт
 
-В репозитории должны быть (уже включены):
+URL: `https://<username>.github.io/daily-blitz-seasons/`
 
-```
-index.html
-css/styles.css
-js/app.js
-js/db.js
-js/vendor/sql-wasm.js
-js/vendor/sql-wasm.wasm   ← обязателен для SQLite
-.nojekyll                 ← чтобы GitHub не ломал wasm
-```
+## Для разработчиков / AI
 
-## Лицензия
-
-Проект для личного использования.
+См. [`agents.md`](agents.md) — архитектура, QA-процесс, падежи в вопросах, что не коммитить.
