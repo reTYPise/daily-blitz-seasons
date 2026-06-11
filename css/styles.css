@@ -21,13 +21,28 @@
   --autumn: #ff9f43;
 }
 
-html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+html, body {
+  min-height: 100%; background: var(--bg); color: var(--text);
+  font-family: var(--sans); overflow-x: hidden; overflow-y: auto;
+}
 
-.screen { display: none; width: 100%; min-height: 100vh; height: 100vh; overflow-y: auto; }
+.screen { display: none; width: 100%; min-height: 100vh; height: auto; overflow: visible; }
 .screen.active { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
 
 /* ── MENU ── */
-#screen-menu { padding: 24px 20px 40px; gap: 0; }
+#screen-menu {
+  padding: 24px 20px 40px; overflow: visible;
+  display: block;
+}
+#screen-menu > * {
+  width: 100%; max-width: 500px; margin-left: auto; margin-right: auto;
+}
+
+.menu-section {
+  position: relative; margin-bottom: 24px; clear: both;
+}
+.menu-section-today { z-index: 2; margin-bottom: 28px; }
+.menu-section-calendar { z-index: 1; margin-bottom: 22px; }
 
 .logo {
   font-family: var(--mono); font-size: clamp(1.5rem, 4.5vw, 2.6rem); font-weight: 700;
@@ -43,9 +58,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 /* ── TODAY ── */
 .today-block {
-  width: 100%; max-width: 500px; margin-bottom: 18px;
-  background: var(--surface); border: 1px solid var(--border);
-  padding: 16px 14px; position: relative; overflow: hidden;
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  padding: 16px 14px; position: relative; overflow: visible;
+  flex-shrink: 0; isolation: isolate;
 }
 .today-block::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--season-accent);
@@ -53,17 +68,18 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .today-date-head {
   margin-bottom: 14px; padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px;
+  line-height: 1.35;
 }
 .today-weekday {
-  font-family: var(--mono); font-size: clamp(1.25rem, 5vw, 1.75rem); font-weight: 700;
-  letter-spacing: -1px; line-height: 1.2; color: var(--text);
-  text-transform: lowercase; flex-shrink: 0;
+  display: inline; font-family: var(--mono);
+  font-size: clamp(1.25rem, 5vw, 1.75rem); font-weight: 700;
+  letter-spacing: -1px; color: var(--text); text-transform: lowercase;
 }
-.today-weekday::after { content: ','; }
+.today-weekday::after { content: ', '; }
 .today-full-date {
-  font-family: var(--mono); font-size: clamp(0.95rem, 3.5vw, 1.15rem); font-weight: 700;
-  color: var(--muted); line-height: 1.2; min-width: 0;
+  display: inline; font-family: var(--mono);
+  font-size: clamp(0.95rem, 3.5vw, 1.15rem); font-weight: 700;
+  color: var(--muted);
 }
 
 .season-card {
@@ -113,8 +129,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 /* ── YEAR CALENDAR ── */
 .year-calendar {
-  width: 100%; max-width: 500px; display: grid;
-  grid-template-columns: repeat(6, 1fr); gap: 5px; margin-bottom: 20px;
+  width: 100%; display: grid;
+  grid-template-columns: repeat(6, 1fr); gap: 5px;
+  position: relative; flex-shrink: 0;
 }
 .month-cell {
   background: var(--surface); border: 1px solid var(--border);
@@ -350,8 +367,6 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 /* ── RESPONSIVE ── */
 @media (max-width: 760px) {
-  html, body { overflow: auto; }
-  .screen { min-height: 100vh; height: auto; }
   .toggle-row { align-items: flex-start; flex-direction: column; gap: 6px; }
   .game-shell { min-height: auto; grid-template-columns: 1fr; gap: 12px; }
   .reference-panel { max-height: none; order: 2; }

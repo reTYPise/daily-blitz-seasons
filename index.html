@@ -22,32 +22,36 @@
   <h1 class="logo">daily<span>-</span>blitz<span>-</span>seasons</h1>
   <div class="tagline">кварталы · сезоны · даты</div>
 
-  <div class="section-label">сегодня</div>
-  <div class="today-block" id="today-block">
-    <div class="today-date-head">
-      <div class="today-weekday" id="today-weekday"></div>
-      <div class="today-full-date" id="today-full-date"></div>
-    </div>
-    <div class="season-card" id="season-card">
-      <div class="season-icon" id="season-icon"></div>
-      <div class="season-info">
-        <div class="season-name" id="season-name"></div>
-        <div class="season-months" id="season-months"></div>
+  <section class="menu-section menu-section-today">
+    <div class="section-label">сегодня</div>
+    <div class="today-block" id="today-block">
+      <div class="today-date-head">
+        <div class="today-weekday" id="today-weekday"></div>
+        <div class="today-full-date" id="today-full-date"></div>
       </div>
-    </div>
-    <div class="today-meta-row">
-      <div class="quarter-group" id="quarter-group">
-        <div class="quarter-badge" id="quarter-badge"></div>
-        <div class="quarter-detail" id="quarter-detail"></div>
+      <div class="season-card" id="season-card">
+        <div class="season-icon" id="season-icon"></div>
+        <div class="season-info">
+          <div class="season-name" id="season-name"></div>
+          <div class="season-months" id="season-months"></div>
+        </div>
       </div>
-      <div class="daily-streak-badge" id="daily-streak-badge"></div>
+      <div class="today-meta-row">
+        <div class="quarter-group" id="quarter-group">
+          <div class="quarter-badge" id="quarter-badge"></div>
+          <div class="quarter-detail" id="quarter-detail"></div>
+        </div>
+        <div class="daily-streak-badge" id="daily-streak-badge"></div>
+      </div>
+      <div class="today-stats" id="today-stats"></div>
+      <button class="today-start-btn" id="today-start-btn" type="button">Тренировка на сегодня</button>
     </div>
-    <div class="today-stats" id="today-stats"></div>
-    <button class="today-start-btn" id="today-start-btn" type="button">Тренировка на сегодня</button>
-  </div>
+  </section>
 
-  <div class="section-label">календарь года</div>
-  <div class="year-calendar" id="year-calendar" aria-label="Календарь года по сезонам и кварталам"></div>
+  <section class="menu-section menu-section-calendar">
+    <div class="section-label">календарь года</div>
+    <div class="year-calendar" id="year-calendar" aria-label="Календарь года по сезонам и кварталам"></div>
+  </section>
 
   <div class="section-label">тренажёр</div>
   <div class="trainer-grid">
