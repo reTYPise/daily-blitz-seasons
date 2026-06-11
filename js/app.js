@@ -506,7 +506,7 @@ function genMonthToQuarter() {
     key: `mtq-${month}`,
     domain: 'quarters',
     context: '',
-    prompt: `В каком квартале ${MONTHS_PREP[month]}?`,
+    prompt: `В каком квартале ${MONTHS_NOM[month]}?`,
     answer: correct,
     choices,
     highlight: { month, quarterNum: qNum }
