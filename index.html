@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="daily-blitz-seasons — тренажёр кварталов и сезонов. Быстро понимай, в каком квартале анонс, отчёт или релиз, и какой месяц к какому сезону относится.">
+<meta name="description" content="daily-blitz-seasons — тренажёр кварталов и сезонов с дашбордом прогресса.">
 <title>daily-blitz-seasons — кварталы и сезоны</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
 <link rel="stylesheet" href="css/styles.css">
@@ -17,104 +17,152 @@
   <div class="timesup-stats" id="timesup-stats"></div>
 </div>
 
-<!-- ════════ MENU ════════ -->
+<!-- ════════ DASHBOARD ════════ -->
 <div class="screen active" id="screen-menu">
-  <h1 class="logo">daily<span>-</span>blitz<span>-</span>seasons</h1>
-  <div class="tagline">кварталы · сезоны · даты</div>
+  <header class="app-header">
+    <div class="brand">
+      <h1 class="logo">daily<span>-</span>blitz<span>-</span>seasons</h1>
+      <p class="tagline">кварталы · сезоны · даты</p>
+    </div>
+    <button class="header-cta" id="today-start-btn" type="button">Тренировка на сегодня</button>
+  </header>
 
-  <section class="menu-section menu-section-today">
-    <div class="section-label">сегодня</div>
-    <div class="today-block" id="today-block">
-      <div class="today-date-head">
-        <div class="today-weekday" id="today-weekday"></div>
-        <div class="today-full-date" id="today-full-date"></div>
-      </div>
-      <div class="season-card" id="season-card">
-        <div class="season-icon" id="season-icon"></div>
-        <div class="season-info">
-          <div class="season-name" id="season-name"></div>
-          <div class="season-months" id="season-months"></div>
+  <main class="dashboard">
+    <div class="dashboard-grid">
+
+      <section class="dash-card dash-today" aria-labelledby="label-today">
+        <div class="card-label" id="label-today">сегодня</div>
+        <div class="today-block" id="today-block">
+          <div class="today-date-head">
+            <div class="today-weekday" id="today-weekday"></div>
+            <div class="today-full-date" id="today-full-date"></div>
+          </div>
+          <div class="season-card" id="season-card">
+            <div class="season-icon" id="season-icon"></div>
+            <div class="season-info">
+              <div class="season-name" id="season-name"></div>
+              <div class="season-months" id="season-months"></div>
+            </div>
+          </div>
+          <div class="today-meta-row">
+            <div class="quarter-group" id="quarter-group">
+              <div class="quarter-badge" id="quarter-badge"></div>
+              <div class="quarter-detail" id="quarter-detail"></div>
+            </div>
+            <div class="daily-streak-badge" id="daily-streak-badge"></div>
+          </div>
         </div>
-      </div>
-      <div class="today-meta-row">
-        <div class="quarter-group" id="quarter-group">
-          <div class="quarter-badge" id="quarter-badge"></div>
-          <div class="quarter-detail" id="quarter-detail"></div>
+      </section>
+
+      <section class="dash-card dash-kpis" aria-labelledby="label-progress">
+        <div class="card-label" id="label-progress">прогресс</div>
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="kpi-value" id="kpi-streak">0</div>
+            <div class="kpi-label">серия дней</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-value" id="kpi-sessions">0</div>
+            <div class="kpi-label">всего сессий</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-value" id="kpi-accuracy">0%</div>
+            <div class="kpi-label">точность</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-value" id="kpi-today">0</div>
+            <div class="kpi-label">сегодня</div>
+          </div>
         </div>
-        <div class="daily-streak-badge" id="daily-streak-badge"></div>
-      </div>
-      <div class="today-stats" id="today-stats"></div>
-      <button class="today-start-btn" id="today-start-btn" type="button">Тренировка на сегодня</button>
+        <div class="weekly-activity" id="weekly-activity" aria-label="Активность за 7 дней"></div>
+      </section>
+
+      <section class="dash-card dash-calendar" aria-labelledby="label-calendar">
+        <div class="card-label" id="label-calendar">календарь года</div>
+        <div class="year-calendar" id="year-calendar" aria-label="Календарь года по сезонам и кварталам"></div>
+      </section>
+
+      <section class="dash-card dash-breakdown" aria-labelledby="label-breakdown">
+        <div class="card-label" id="label-breakdown">по тренажёрам</div>
+        <div class="trainer-breakdown" id="trainer-breakdown"></div>
+      </section>
+
+      <section class="dash-card dash-recent" aria-labelledby="label-recent">
+        <div class="card-label" id="label-recent">последние сессии</div>
+        <div class="recent-sessions" id="recent-sessions"></div>
+      </section>
+
+      <section class="dash-card dash-training" aria-labelledby="label-training">
+        <div class="card-label" id="label-training">тренировка</div>
+        <div class="training-layout">
+          <div class="training-main">
+            <div class="trainer-grid">
+              <button class="trainer-btn selected" data-trainer="seasons" type="button">
+                <span class="trainer-icon">🌿</span>
+                <span class="trainer-name">Сезоны</span>
+                <span class="trainer-sub">месяц → зима, весна, лето, осень</span>
+              </button>
+              <button class="trainer-btn" data-trainer="quarters" type="button">
+                <span class="trainer-icon">📊</span>
+                <span class="trainer-name">Кварталы</span>
+                <span class="trainer-sub">Q1–Q4, отчёты и анонсы</span>
+              </button>
+              <button class="trainer-btn" data-trainer="mixed" type="button">
+                <span class="trainer-icon">⚡</span>
+                <span class="trainer-name">Смешанный</span>
+                <span class="trainer-sub">сезоны и кварталы вместе</span>
+              </button>
+            </div>
+
+            <div class="settings-grid">
+              <div class="settings-block">
+                <div class="settings-label">режим</div>
+                <div class="game-mode-grid">
+                  <button class="gm-btn selected" data-gm="classic" type="button">
+                    <span class="gm-icon">📋</span>классика
+                  </button>
+                  <button class="gm-btn" data-gm="timed" type="button">
+                    <span class="gm-icon">⏱</span>на время
+                  </button>
+                </div>
+              </div>
+              <div class="settings-block">
+                <div class="settings-label" id="sub-label">вопросов</div>
+                <div class="mode-options" id="opts-classic">
+                  <div class="sub-grid">
+                    <button class="sub-btn" data-val="10" type="button">10</button>
+                    <button class="sub-btn selected" data-val="15" type="button">15</button>
+                    <button class="sub-btn" data-val="20" type="button">20</button>
+                    <button class="sub-btn" data-val="30" type="button">30</button>
+                  </div>
+                </div>
+                <div class="mode-options" id="opts-timed" style="display:none">
+                  <div class="sub-grid">
+                    <button class="sub-btn" data-val="45" type="button">45с</button>
+                    <button class="sub-btn selected" data-val="60" type="button">1м</button>
+                    <button class="sub-btn" data-val="90" type="button">90с</button>
+                    <button class="sub-btn" data-val="120" type="button">2м</button>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-block settings-toggle">
+                <label class="toggle-row" for="guide-toggle">
+                  <input id="guide-toggle" type="checkbox" checked>
+                  справочник в игре
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="cta-panel">
+            <p class="cta-hint">Когда слышишь «релиз в Q3» — сразу понимаешь месяцы.</p>
+            <button class="start-btn" id="start-btn" type="button">СТАРТ →</button>
+          </div>
+        </div>
+      </section>
+
     </div>
-  </section>
-
-  <section class="menu-section menu-section-calendar">
-    <div class="section-label">календарь года</div>
-    <div class="year-calendar" id="year-calendar" aria-label="Календарь года по сезонам и кварталам"></div>
-  </section>
-
-  <div class="section-label">тренажёр</div>
-  <div class="trainer-grid">
-    <button class="trainer-btn selected" data-trainer="seasons" type="button">
-      <span class="trainer-icon">🌿</span>
-      <span class="trainer-name">Сезоны</span>
-      <span class="trainer-sub">месяц → зима, весна, лето, осень</span>
-    </button>
-    <button class="trainer-btn" data-trainer="quarters" type="button">
-      <span class="trainer-icon">📊</span>
-      <span class="trainer-name">Кварталы</span>
-      <span class="trainer-sub">Q1–Q4, отчёты и анонсы</span>
-    </button>
-    <button class="trainer-btn" data-trainer="mixed" type="button">
-      <span class="trainer-icon">⚡</span>
-      <span class="trainer-name">Смешанный</span>
-      <span class="trainer-sub">сезоны и кварталы вместе</span>
-    </button>
-  </div>
-
-  <div class="section-label">настройки</div>
-  <div class="game-mode-grid">
-    <button class="gm-btn selected" data-gm="classic" type="button">
-      <span class="gm-icon">📋</span>классика<span class="gm-sub">N вопросов</span>
-    </button>
-    <button class="gm-btn" data-gm="timed" type="button">
-      <span class="gm-icon">⏱</span>на время<span class="gm-sub">успей за T сек</span>
-    </button>
-  </div>
-
-  <div class="mode-options" id="opts-classic">
-    <div class="section-label">количество вопросов</div>
-    <div class="sub-grid">
-      <button class="sub-btn" data-val="10" type="button">10</button>
-      <button class="sub-btn selected" data-val="15" type="button">15</button>
-      <button class="sub-btn" data-val="20" type="button">20</button>
-      <button class="sub-btn" data-val="30" type="button">30</button>
-    </div>
-  </div>
-
-  <div class="mode-options" id="opts-timed" style="display:none">
-    <div class="section-label">время на сессию</div>
-    <div class="sub-grid">
-      <button class="sub-btn" data-val="45" type="button">45 сек</button>
-      <button class="sub-btn selected" data-val="60" type="button">1 мин</button>
-      <button class="sub-btn" data-val="90" type="button">90 сек</button>
-      <button class="sub-btn" data-val="120" type="button">2 мин</button>
-    </div>
-  </div>
-
-  <div class="toggle-stack">
-    <div class="toggle-row">
-      <label for="guide-toggle">
-        <input id="guide-toggle" type="checkbox" checked>
-        показывать справочник
-      </label>
-      <div class="toggle-hint">справа в тренировке</div>
-    </div>
-  </div>
-
-  <button class="start-btn" id="start-btn" type="button">СТАРТ →</button>
-
-  <p class="menu-hint">Когда слышишь «релиз в Q3» или «отчёт за прошлый квартал» — сразу понимаешь, о каких месяцах речь.</p>
+  </main>
 </div>
 
 <!-- ════════ GAME ════════ -->
@@ -165,19 +213,23 @@
 
 <!-- ════════ SCORE ════════ -->
 <div class="screen" id="screen-score">
-  <div class="score-title" id="score-mode-label">итого</div>
-  <div class="score-number" id="final-score">0</div>
-  <div class="score-sub" id="final-sub"></div>
-  <div class="score-time-display" id="final-time" style="display:none"></div>
-  <div class="score-date-display" id="final-date"></div>
-  <div class="score-sub" id="final-streak"></div>
-  <div class="score-sub" id="final-daily-streak"></div>
-  <div class="score-actions">
-    <button class="score-btn" id="menu-btn" type="button">меню</button>
-    <button class="score-btn primary" id="restart-btn" type="button">ещё раз</button>
+  <div class="score-panel">
+    <div class="score-title" id="score-mode-label">итого</div>
+    <div class="score-number" id="final-score">0</div>
+    <div class="score-sub" id="final-sub"></div>
+    <div class="score-time-display" id="final-time" style="display:none"></div>
+    <div class="score-date-display" id="final-date"></div>
+    <div class="score-sub" id="final-streak"></div>
+    <div class="score-sub" id="final-daily-streak"></div>
+    <div class="score-actions">
+      <button class="score-btn" id="menu-btn" type="button">дашборд</button>
+      <button class="score-btn primary" id="restart-btn" type="button">ещё раз</button>
+    </div>
   </div>
 </div>
 
+<script src="js/vendor/sql-wasm.js"></script>
+<script src="js/db.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

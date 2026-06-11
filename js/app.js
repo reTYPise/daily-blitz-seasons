@@ -1,8 +1,5 @@
 'use strict';
 
-const STORAGE_KEY = 'daily-blitz-seasons-v2';
-const LEGACY_STORAGE_KEYS = ['daily-blitz-seasons-v1', 'math-blitz-date-v1'];
-
 const MONTHS_NOM = [
   'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
   'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'
@@ -66,8 +63,6 @@ let timerTotal = 0;
 let warnedHalf = false;
 let warnedCritical = false;
 let gameOver = false;
-
-let persistedData = loadPersistedData();
 
 // ── AUDIO ──
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -147,37 +142,8 @@ function playTimeUp() {
   } catch (e) {}
 }
 
-// ── STORAGE ──
-function loadPersistedData() {
-  try {
-    let raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      for (const legacyKey of LEGACY_STORAGE_KEYS) {
-        raw = localStorage.getItem(legacyKey);
-        if (raw) {
-          localStorage.setItem(STORAGE_KEY, raw);
-          localStorage.removeItem(legacyKey);
-          break;
-        }
-      }
-    }
-    if (!raw) return { sessions: [] };
-    const parsed = JSON.parse(raw);
-    return { sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [] };
-  } catch (e) {
-    return { sessions: [] };
-  }
-}
-
-function savePersistedData() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedData));
-}
-
 function formatDateKey(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return AppDB.formatDateKey(date);
 }
 
 function parseDateKey(key) {
@@ -185,38 +151,8 @@ function parseDateKey(key) {
   return new Date(y, m - 1, d);
 }
 
-function getPracticeDates() {
-  const dates = new Set();
-  persistedData.sessions.forEach(s => { if (s.date) dates.add(s.date); });
-  return dates;
-}
-
-function calculateDailyStreak(referenceDate = new Date()) {
-  const dates = getPracticeDates();
-  if (dates.size === 0) return 0;
-  const cursor = new Date(referenceDate);
-  cursor.setHours(0, 0, 0, 0);
-  if (!dates.has(formatDateKey(cursor))) cursor.setDate(cursor.getDate() - 1);
-  let count = 0;
-  while (dates.has(formatDateKey(cursor))) {
-    count++;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return count;
-}
-
-function hasSessionToday(date = new Date()) {
-  const key = formatDateKey(date);
-  return persistedData.sessions.some(s => s.date === key);
-}
-
-function getTodaySessionsCount(date = new Date()) {
-  const key = formatDateKey(date);
-  return persistedData.sessions.filter(s => s.date === key).length;
-}
-
 function recordSession(summary) {
-  persistedData.sessions.push({
+  AppDB.recordSession({
     date: sessionDateKey || formatDateKey(new Date()),
     timestamp: Date.now(),
     trainer: summary.trainer,
@@ -227,7 +163,6 @@ function recordSession(summary) {
     bestStreak: summary.bestStreak,
     elapsedSec: summary.elapsedSec
   });
-  savePersistedData();
 }
 
 function pluralDays(n) {
@@ -289,8 +224,10 @@ function pickDistinct(pool, count, exclude = []) {
   return shuffle(available).slice(0, count);
 }
 
-// ── MENU RENDER ──
-function renderTodayBlock(date = new Date()) {
+const TRAINER_NAMES = { seasons: 'Сезоны', quarters: 'Кварталы', mixed: 'Смешанный' };
+const WEEK_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+
+function renderDashboard(date = new Date()) {
   const month = date.getMonth();
   const season = getSeasonForMonth(month);
   const quarter = QUARTERS[getQuarterForMonth(month)];
@@ -304,24 +241,80 @@ function renderTodayBlock(date = new Date()) {
   document.getElementById('quarter-badge').textContent = `${quarter.label} ${date.getFullYear()}`;
   document.getElementById('quarter-detail').textContent = quarter.range;
 
-  const dailyStreak = calculateDailyStreak(date);
+  const stats = AppDB.getOverallStats(date);
   document.getElementById('daily-streak-badge').innerHTML =
-    `🔥 серия: <span>${dailyStreak}</span> ${pluralDays(dailyStreak)}`;
-
-  const todayCount = getTodaySessionsCount(date);
-  const totalSessions = persistedData.sessions.length;
-  const statsEl = document.getElementById('today-stats');
-  if (todayCount > 0) {
-    statsEl.innerHTML = `сегодня: <span>${todayCount}</span> ${pluralSessions(todayCount)} · всего: <span>${totalSessions}</span>`;
-  } else {
-    statsEl.innerHTML = `сегодня ещё не тренировались · всего: <span>${totalSessions}</span> ${pluralSessions(totalSessions)}`;
-  }
+    `🔥 <span>${stats.dailyStreak}</span> ${pluralDays(stats.dailyStreak)}`;
+  document.getElementById('kpi-streak').textContent = stats.dailyStreak;
+  document.getElementById('kpi-sessions').textContent = stats.totalSessions;
+  document.getElementById('kpi-accuracy').textContent = `${stats.accuracy}%`;
+  document.getElementById('kpi-today').textContent = stats.todayCount;
 
   const todayBtn = document.getElementById('today-start-btn');
-  todayBtn.textContent = hasSessionToday(date) ? 'Продолжить на сегодня' : 'Тренировка на сегодня';
-  todayBtn.classList.toggle('done-today', hasSessionToday(date));
+  const doneToday = AppDB.hasSessionToday(date);
+  todayBtn.textContent = doneToday ? 'Продолжить на сегодня' : 'Тренировка на сегодня';
+  todayBtn.classList.toggle('done-today', doneToday);
 
   renderYearCalendar(date);
+  renderWeeklyActivity(date);
+  renderTrainerBreakdown();
+  renderRecentSessions();
+}
+
+function renderWeeklyActivity(date = new Date()) {
+  const container = document.getElementById('weekly-activity');
+  const days = AppDB.getWeeklyActivity(date);
+  const max = Math.max(1, ...days.map(d => d.count));
+  const todayKey = formatDateKey(date);
+  container.innerHTML = days.map(d => {
+    const h = Math.max(8, Math.round((d.count / max) * 48));
+    const cls = [
+      'week-bar',
+      d.count > 0 ? 'has-data' : '',
+      d.date === todayKey ? 'is-today' : ''
+    ].filter(Boolean).join(' ');
+    return `<div class="week-bar-wrap">
+      <div class="week-bar-count">${d.count || ''}</div>
+      <div class="${cls}" style="height:${h}px"></div>
+      <div class="week-bar-label">${WEEK_SHORT[d.weekday]}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderTrainerBreakdown() {
+  const container = document.getElementById('trainer-breakdown');
+  const rows = AppDB.getTrainerBreakdown();
+  if (rows.length === 0) {
+    container.innerHTML = '<div class="recent-empty">Пока нет данных — начни первую сессию.</div>';
+    return;
+  }
+  container.innerHTML = rows.map(r => {
+    const name = TRAINER_NAMES[r.trainer] || r.trainer;
+    return `<div class="breakdown-row">
+      <div>
+        <div class="breakdown-name">${name}</div>
+        <div class="breakdown-meta">${r.sessions} ${pluralSessions(r.sessions)} · ${r.accuracy}%</div>
+      </div>
+      <div class="breakdown-bar-wrap"><div class="breakdown-bar-fill" style="width:${r.accuracy}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderRecentSessions() {
+  const container = document.getElementById('recent-sessions');
+  const sessions = AppDB.getRecentSessions(6);
+  if (sessions.length === 0) {
+    container.innerHTML = '<div class="recent-empty">Сессии появятся здесь после тренировки.</div>';
+    return;
+  }
+  container.innerHTML = sessions.map(s => {
+    const name = TRAINER_NAMES[s.trainer] || s.trainer;
+    const pct = s.answered > 0 ? Math.round((s.correct / s.answered) * 100) : 0;
+    return `<div class="recent-row">
+      <span class="recent-date">${s.date}</span>
+      <span class="recent-trainer">${name}</span>
+      <span class="recent-score">${s.correct}/${s.answered} · ${pct}%</span>
+    </div>`;
+  }).join('');
 }
 
 function renderYearCalendar(date = new Date()) {
@@ -576,6 +569,8 @@ function selectGameMode(btn) {
   selectedGameMode = btn.dataset.gm;
   document.getElementById('opts-classic').style.display = selectedGameMode === 'classic' ? 'block' : 'none';
   document.getElementById('opts-timed').style.display = selectedGameMode === 'timed' ? 'block' : 'none';
+  const subLabel = document.getElementById('sub-label');
+  if (subLabel) subLabel.textContent = selectedGameMode === 'classic' ? 'вопросов' : 'время';
 }
 
 function selectSub(btn) {
@@ -851,7 +846,7 @@ function showScore() {
 
   const sessionDate = parseDateKey(sessionDateKey || formatDateKey(new Date()));
   applySeasonTheme(sessionDate);
-  const dailyStreak = calculateDailyStreak(sessionDate);
+  const dailyStreak = AppDB.calculateDailyStreak(sessionDate);
 
   document.getElementById('score-mode-label').textContent = modeLabel;
   document.getElementById('final-score').textContent = correctCount;
@@ -871,7 +866,7 @@ function showScore() {
 
 function goMenu() {
   syncControlsFromState();
-  renderTodayBlock();
+  renderDashboard();
   showScreen('menu');
 }
 
@@ -906,4 +901,14 @@ function bindEvents() {
 }
 
 bindEvents();
-renderTodayBlock();
+
+async function initApp() {
+  try {
+    await AppDB.init();
+  } catch (e) {
+    console.error('SQLite init failed', e);
+  }
+  renderDashboard();
+}
+
+initApp();
