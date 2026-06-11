@@ -932,20 +932,24 @@ async function loginUser(rawLogin, rawPassword, writeCookie = true) {
     Auth.showError('Пароль: от 4 до 64 символов');
     return false;
   }
-  const passwordHash = await Auth.hashPassword(password);
-  const result = AppDB.loginWithPassword(login, passwordHash);
-  if (!result.ok) {
-    Auth.showError(result.error || 'Не удалось войти');
-    return false;
+  Auth.setSubmitEnabled(false);
+  try {
+    const result = await AppDB.loginWithPassword(login, password);
+    if (!result.ok) {
+      Auth.showError(result.error || 'Не удалось войти');
+      return false;
+    }
+    if (writeCookie) {
+      Auth.setLoginCookie(login);
+      Auth.setSessionCookie(result.token);
+    }
+    Auth.hideLogin();
+    updateUserHeader(login);
+    renderDashboard();
+    return true;
+  } finally {
+    Auth.setSubmitEnabled(true);
   }
-  if (writeCookie) {
-    Auth.setLoginCookie(login);
-    Auth.setSessionCookie(result.token);
-  }
-  Auth.hideLogin();
-  updateUserHeader(login);
-  renderDashboard();
-  return true;
 }
 
 function logoutUser() {
@@ -982,11 +986,12 @@ async function initApp() {
   bindAuthEvents();
   const savedLogin = Auth.getLoginFromCookie();
   const savedToken = Auth.getSessionFromCookie();
+  const normalizedLogin = Auth.normalizeLogin(savedLogin || '');
   if (
     savedLogin &&
     savedToken &&
-    Auth.isValidLogin(Auth.normalizeLogin(savedLogin)) &&
-    AppDB.restoreSession(Auth.normalizeLogin(savedLogin), savedToken)
+    Auth.canRestoreSession(normalizedLogin, savedToken) &&
+    AppDB.restoreSession(normalizedLogin, savedToken)
   ) {
     Auth.hideLogin();
     updateUserHeader(AppDB.getCurrentUser());
