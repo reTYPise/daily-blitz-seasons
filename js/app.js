@@ -1,47 +1,59 @@
 'use strict';
 
-const STORAGE_KEY = 'daily-blitz-seasons-v1';
-const LEGACY_STORAGE_KEY = 'math-blitz-date-v1';
-const ALL_OPS = ['×', '÷', '+', '−'];
+const STORAGE_KEY = 'daily-blitz-seasons-v2';
+const LEGACY_STORAGE_KEYS = ['daily-blitz-seasons-v1', 'math-blitz-date-v1'];
+
+const MONTHS_NOM = [
+  'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+  'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'
+];
+const MONTHS_GEN = [
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+];
+const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
 const SEASONS = {
-  winter: { name: 'Зима', months: 'декабрь — февраль', icon: '❄️', accent: '#7ec8ff', monthsSet: [11, 0, 1] },
-  spring: { name: 'Весна', months: 'март — май', icon: '🌸', accent: '#ff8ec7', monthsSet: [2, 3, 4] },
-  summer: { name: 'Лето', months: 'июнь — август', icon: '☀️', accent: '#ffd166', monthsSet: [5, 6, 7] },
-  autumn: { name: 'Осень', months: 'сентябрь — ноябрь', icon: '🍂', accent: '#ff9f43', monthsSet: [8, 9, 10] }
+  winter: { key: 'winter', name: 'Зима', icon: '❄️', accent: '#7ec8ff', months: [11, 0, 1], label: 'декабрь — февраль' },
+  spring: { key: 'spring', name: 'Весна', icon: '🌸', accent: '#ff8ec7', months: [2, 3, 4], label: 'март — май' },
+  summer: { key: 'summer', name: 'Лето', icon: '☀️', accent: '#ffd166', months: [5, 6, 7], label: 'июнь — август' },
+  autumn: { key: 'autumn', name: 'Осень', icon: '🍂', accent: '#ff9f43', months: [8, 9, 10], label: 'сентябрь — ноябрь' }
+};
+const SEASON_LIST = Object.values(SEASONS);
+
+const QUARTERS = {
+  1: { num: 1, short: 'Q1', label: '1-й квартал', months: [0, 1, 2], range: 'январь — март' },
+  2: { num: 2, short: 'Q2', label: '2-й квартал', months: [3, 4, 5], range: 'апрель — июнь' },
+  3: { num: 3, short: 'Q3', label: '3-й квартал', months: [6, 7, 8], range: 'июль — сентябрь' },
+  4: { num: 4, short: 'Q4', label: '4-й квартал', months: [9, 10, 11], range: 'октябрь — декабрь' }
 };
 
+const CONTEXT_PHRASES = [
+  { template: '«Новые ноутбуки выйдут в {q}»', type: 'quarter' },
+  { template: '«Выручка за {q} выросла»', type: 'quarter' },
+  { template: '«Анонс на {season}»', type: 'season' },
+  { template: '«Отчёт за прошлый квартал — {q}»', type: 'quarter' },
+  { template: '«Запуск продукта в {season}»', type: 'season' }
+];
+
 const WEEKDAYS = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
-const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
 // ── SETTINGS ──
-let selectedOps = ['×'];
-let selectedRange = 10;
-let selectedFocus = 'any';
-let showAnswerGuide = true;
-let guideExpanded = true;
-let sequenceMode = 'random';
-let selectedInputMode = 'choices';
+let selectedTrainer = 'seasons';
+let showReference = true;
 let selectedGameMode = 'classic';
-let classicCount = 20;
+let classicCount = 15;
 let timedSeconds = 60;
-let survivalSeconds = 120;
 
 // ── GAME STATE ──
-let typedValue = '';
-let currentAnswer = 0;
-let currentGuideKey = '';
 let currentQuestion = null;
 let currentChoices = [];
-let lastQuestion = null;
-let orderedQueue = [];
-let orderedQueueActive = false;
-let orderedFirstDone = false;
+let lastQuestionKey = '';
 let correctCount = 0;
 let wrongCount = 0;
 let streak = 0;
 let bestStreak = 0;
-let totalQuestions = 20;
+let totalQuestions = 15;
 let questionNum = 0;
 let locked = false;
 let lastSettings = {};
@@ -135,15 +147,18 @@ function playTimeUp() {
   } catch (e) {}
 }
 
-// ── DATE & STORAGE ──
+// ── STORAGE ──
 function loadPersistedData() {
   try {
     let raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      raw = localStorage.getItem(LEGACY_STORAGE_KEY);
-      if (raw) {
-        localStorage.setItem(STORAGE_KEY, raw);
-        localStorage.removeItem(LEGACY_STORAGE_KEY);
+      for (const legacyKey of LEGACY_STORAGE_KEYS) {
+        raw = localStorage.getItem(legacyKey);
+        if (raw) {
+          localStorage.setItem(STORAGE_KEY, raw);
+          localStorage.removeItem(legacyKey);
+          break;
+        }
       }
     }
     if (!raw) return { sessions: [] };
@@ -170,40 +185,18 @@ function parseDateKey(key) {
   return new Date(y, m - 1, d);
 }
 
-function getSeasonForDate(date) {
-  const month = date.getMonth();
-  return Object.values(SEASONS).find(s => s.monthsSet.includes(month)) || SEASONS.summer;
-}
-
-function getQuarterLabel(date) {
-  const q = Math.floor(date.getMonth() / 3) + 1;
-  return `${q}-й квартал ${date.getFullYear()}`;
-}
-
-function formatFullDate(date) {
-  return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
-}
-
 function getPracticeDates() {
   const dates = new Set();
-  persistedData.sessions.forEach(s => {
-    if (s.date) dates.add(s.date);
-  });
+  persistedData.sessions.forEach(s => { if (s.date) dates.add(s.date); });
   return dates;
 }
 
 function calculateDailyStreak(referenceDate = new Date()) {
   const dates = getPracticeDates();
   if (dates.size === 0) return 0;
-
   const cursor = new Date(referenceDate);
   cursor.setHours(0, 0, 0, 0);
-  const todayKey = formatDateKey(cursor);
-
-  if (!dates.has(todayKey)) {
-    cursor.setDate(cursor.getDate() - 1);
-  }
-
+  if (!dates.has(formatDateKey(cursor))) cursor.setDate(cursor.getDate() - 1);
   let count = 0;
   while (dates.has(formatDateKey(cursor))) {
     count++;
@@ -226,32 +219,90 @@ function recordSession(summary) {
   persistedData.sessions.push({
     date: sessionDateKey || formatDateKey(new Date()),
     timestamp: Date.now(),
+    trainer: summary.trainer,
     gameMode: summary.gameMode,
     correct: summary.correct,
     wrong: summary.wrong,
     answered: summary.answered,
     bestStreak: summary.bestStreak,
-    elapsedSec: summary.elapsedSec,
-    ops: summary.ops
+    elapsedSec: summary.elapsedSec
   });
   savePersistedData();
 }
 
+function pluralDays(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'день';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'дня';
+  return 'дней';
+}
+
+function pluralSessions(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'сессия';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'сессии';
+  return 'сессий';
+}
+
+// ── CALENDAR DATA ──
+function getSeasonForMonth(monthIndex) {
+  return SEASON_LIST.find(s => s.months.includes(monthIndex)) || SEASONS.summer;
+}
+
+function getQuarterForMonth(monthIndex) {
+  return Math.floor(monthIndex / 3) + 1;
+}
+
+function formatFullDate(date) {
+  return `${date.getDate()} ${MONTHS_GEN[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function getQuarterLabel(date) {
+  const q = getQuarterForMonth(date.getMonth());
+  return `${q}-й квартал ${date.getFullYear()}`;
+}
+
 function applySeasonTheme(date) {
-  const season = getSeasonForDate(date);
+  const season = getSeasonForMonth(date.getMonth());
   document.documentElement.style.setProperty('--season-accent', season.accent);
 }
 
+function randInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function shuffle(arr) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function pickDistinct(pool, count, exclude = []) {
+  const available = pool.filter(x => !exclude.includes(x));
+  return shuffle(available).slice(0, count);
+}
+
+// ── MENU RENDER ──
 function renderTodayBlock(date = new Date()) {
-  const season = getSeasonForDate(date);
+  const month = date.getMonth();
+  const season = getSeasonForMonth(month);
+  const quarter = QUARTERS[getQuarterForMonth(month)];
   applySeasonTheme(date);
 
   document.getElementById('today-weekday').textContent = WEEKDAYS[date.getDay()];
   document.getElementById('today-full-date').textContent = formatFullDate(date);
   document.getElementById('season-icon').textContent = season.icon;
   document.getElementById('season-name').textContent = season.name;
-  document.getElementById('season-months').textContent = season.months;
-  document.getElementById('quarter-badge').textContent = getQuarterLabel(date);
+  document.getElementById('season-months').textContent = season.label;
+  document.getElementById('quarter-badge').textContent = `${quarter.label} ${date.getFullYear()}`;
+  document.getElementById('quarter-detail').textContent = quarter.range;
 
   const dailyStreak = calculateDailyStreak(date);
   document.getElementById('daily-streak-badge').innerHTML =
@@ -267,428 +318,345 @@ function renderTodayBlock(date = new Date()) {
   }
 
   const todayBtn = document.getElementById('today-start-btn');
-  if (hasSessionToday(date)) {
-    todayBtn.textContent = 'Продолжить тренировку на сегодня';
-    todayBtn.classList.add('done-today');
-  } else {
-    todayBtn.textContent = 'Начать тренировку на сегодня';
-    todayBtn.classList.remove('done-today');
-  }
+  todayBtn.textContent = hasSessionToday(date) ? 'Продолжить на сегодня' : 'Тренировка на сегодня';
+  todayBtn.classList.toggle('done-today', hasSessionToday(date));
+
+  renderYearCalendar(date);
 }
 
-function pluralDays(n) {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'день';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'дня';
-  return 'дней';
+function renderYearCalendar(date = new Date()) {
+  const container = document.getElementById('year-calendar');
+  const todayMonth = date.getMonth();
+  container.innerHTML = MONTHS_SHORT.map((short, i) => {
+    const season = getSeasonForMonth(i);
+    const quarter = getQuarterForMonth(i);
+    const classes = [
+      'month-cell',
+      `season-${season.key}`,
+      `quarter-q${quarter}`,
+      i === todayMonth ? 'is-today' : ''
+    ].filter(Boolean).join(' ');
+    return `<div class="${classes}" title="${MONTHS_NOM[i]} · ${season.name} · Q${quarter}">
+      <span class="month-short">${short}</span>
+      <span class="month-q">Q${quarter}</span>
+    </div>`;
+  }).join('');
 }
 
-function pluralSessions(n) {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'сессия';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'сессии';
-  return 'сессий';
-}
-
-function startTodayTraining() {
-  const randomOp = ALL_OPS[Math.floor(Math.random() * ALL_OPS.length)];
-  selectedOps = [randomOp];
-  document.querySelectorAll('.op-btn').forEach(btn => {
-    btn.classList.toggle('selected', btn.dataset.op === randomOp);
-  });
-  resetQuestionSequence();
-  renderPracticeGuide();
-  startGame();
-}
-
-// ── MENU ──
-function toggleOp(btn) {
-  const op = btn.dataset.op;
-  if (selectedOps.includes(op)) {
-    if (selectedOps.length === 1) return;
-    selectedOps = selectedOps.filter(o => o !== op);
-    btn.classList.remove('selected');
-  } else {
-    selectedOps.push(op);
-    btn.classList.add('selected');
-  }
-  resetQuestionSequence();
-  renderPracticeGuide();
-}
-
-function selectRange(control) {
-  selectedRange = parseInt(control.value || control.dataset.range);
-  updateFocusOptions();
-  resetQuestionSequence();
-  renderPracticeGuide();
-}
-
-function selectFocus(control) {
-  selectedFocus = control.value;
-  resetQuestionSequence();
-  renderPracticeGuide();
-}
-
-function toggleGuide(control) {
-  showAnswerGuide = control.checked;
-  guideExpanded = showAnswerGuide;
-  renderPracticeGuide();
-}
-
-function setGuideExpanded(expanded) {
-  guideExpanded = expanded;
-  renderPracticeGuide();
-  highlightGuideAnswer();
-}
-
-function selectSequenceMode(control) {
-  sequenceMode = control.value;
-  resetQuestionSequence();
-}
-
-function resetQuestionSequence() {
-  orderedQueue = [];
-  orderedQueueActive = false;
-  orderedFirstDone = false;
-  lastQuestion = null;
-}
-
-function updateFocusOptions() {
-  const select = document.getElementById('focus-select');
-  if (!select) return;
-
-  const previous = selectedFocus;
-  select.innerHTML = '<option value="any">любые числа</option>';
-  for (let i = 1; i <= selectedRange; i++) {
-    const option = document.createElement('option');
-    option.value = String(i);
-    option.textContent = `только на ${i}`;
-    select.appendChild(option);
+function renderReferencePanel(highlight = {}) {
+  const panel = document.getElementById('reference-panel');
+  if (!panel) return;
+  if (!showReference) {
+    panel.className = 'reference-panel hidden';
+    panel.innerHTML = '';
+    return;
   }
 
-  selectedFocus = previous !== 'any' && Number(previous) <= selectedRange ? previous : 'any';
-  select.value = selectedFocus;
+  const { month, seasonKey, quarterNum } = highlight;
+
+  const seasonRows = SEASON_LIST.map(s => {
+    const monthTags = s.months.map(m => {
+      const cls = [
+        'ref-month',
+        month === m ? 'highlight' : '',
+        seasonKey === s.key ? 'group-highlight' : ''
+      ].filter(Boolean).join(' ');
+      return `<span class="${cls}">${MONTHS_SHORT[m]}</span>`;
+    }).join('');
+    const rowCls = seasonKey === s.key ? 'ref-season-row highlight-row' : 'ref-season-row';
+    return `<div class="${rowCls}">
+      <div class="ref-row-head">${s.icon} ${s.name}</div>
+      <div class="ref-months">${monthTags}</div>
+    </div>`;
+  }).join('');
+
+  const quarterRows = Object.values(QUARTERS).map(q => {
+    const monthTags = q.months.map(m => {
+      const cls = [
+        'ref-month',
+        month === m ? 'highlight' : '',
+        quarterNum === q.num ? 'group-highlight' : ''
+      ].filter(Boolean).join(' ');
+      return `<span class="${cls}">${MONTHS_SHORT[m]}</span>`;
+    }).join('');
+    const rowCls = quarterNum === q.num ? 'ref-quarter-row highlight-row' : 'ref-quarter-row';
+    return `<div class="${rowCls}">
+      <div class="ref-row-head">${q.short} · ${q.range}</div>
+      <div class="ref-months">${monthTags}</div>
+    </div>`;
+  }).join('');
+
+  panel.className = 'reference-panel';
+  panel.innerHTML = `
+    <div class="ref-head">
+      <div class="ref-title">Справочник</div>
+      <div class="ref-meta">подсветка текущего вопроса</div>
+    </div>
+    <div class="ref-section">
+      <div class="ref-section-label">Сезоны</div>
+      ${seasonRows}
+    </div>
+    <div class="ref-section">
+      <div class="ref-section-label">Кварталы</div>
+      ${quarterRows}
+    </div>
+  `;
 }
 
-function syncSettingsFromControls() {
-  const rangeSelect = document.getElementById('range-select');
-  const focusSelect = document.getElementById('focus-select');
-  const guideToggle = document.getElementById('guide-toggle');
-  const sequenceSelect = document.getElementById('sequence-mode-select');
-  const selectedGameButton = document.querySelector('.gm-btn.selected');
-  const selectedInputButton = document.querySelector('.mode-btn.selected');
-  const visibleFocus = focusSelect?.value;
-
-  selectedRange = parseInt(rangeSelect?.value || selectedRange);
-  updateFocusOptions();
-  if (visibleFocus && (visibleFocus === 'any' || Number(visibleFocus) <= selectedRange)) {
-    selectedFocus = visibleFocus;
-    const updatedFocusSelect = document.getElementById('focus-select');
-    if (updatedFocusSelect) updatedFocusSelect.value = selectedFocus;
-  }
-  showAnswerGuide = guideToggle ? guideToggle.checked : showAnswerGuide;
-  sequenceMode = sequenceSelect?.value || sequenceMode;
-  selectedGameMode = selectedGameButton?.dataset.gm || selectedGameMode;
-  selectedInputMode = selectedInputButton?.dataset.mode || selectedInputMode;
-
-  const activeOptions = document.getElementById('opts-' + selectedGameMode);
-  const selectedSub = activeOptions?.querySelector('.sub-btn.selected');
-  if (selectedSub) selectSubValue(selectedGameMode, parseInt(selectedSub.dataset.val));
+// ── QUESTION GENERATION ──
+function getTrainerPool() {
+  if (selectedTrainer === 'seasons') return ['seasons'];
+  if (selectedTrainer === 'quarters') return ['quarters'];
+  return ['seasons', 'quarters'];
 }
 
-function syncControlsFromState() {
-  const rangeSelect = document.getElementById('range-select');
-  const guideToggle = document.getElementById('guide-toggle');
-  const sequenceSelect = document.getElementById('sequence-mode-select');
+function generateQuestion() {
+  const pool = getTrainerPool();
+  const domain = pickRandom(pool);
+  const generators = domain === 'seasons'
+    ? [genMonthToSeason, genSeasonPickMonth, genMonthsInSeason, genContextSeason]
+    : [genMonthToQuarter, genQuarterMonthsSet, genQuarterPickMonth, genContextQuarter];
 
-  if (rangeSelect) rangeSelect.value = String(selectedRange);
-  updateFocusOptions();
-  if (guideToggle) guideToggle.checked = showAnswerGuide;
-  if (sequenceSelect) sequenceSelect.value = sequenceMode;
+  let q, attempts = 0;
+  do {
+    q = pickRandom(generators)();
+    attempts++;
+  } while (q.key === lastQuestionKey && attempts < 20);
+
+  lastQuestionKey = q.key;
+  return q;
+}
+
+function genMonthToSeason() {
+  const month = randInt(0, 11);
+  const season = getSeasonForMonth(month);
+  const wrong = pickDistinct(SEASON_LIST.map(s => s.name), 3, [season.name]);
+  const choices = shuffle([season.name, ...wrong]);
+  return {
+    key: `mts-${month}`,
+    domain: 'seasons',
+    context: '',
+    prompt: `Какой сезон у ${MONTHS_NOM[month]}?`,
+    answer: season.name,
+    choices,
+    highlight: { month, seasonKey: season.key }
+  };
+}
+
+function genSeasonPickMonth() {
+  const season = pickRandom(SEASON_LIST);
+  const correct = pickRandom(season.months);
+  const wrong = pickDistinct(
+    [...Array(12).keys()],
+    3,
+    season.months
+  );
+  const choices = shuffle([MONTHS_NOM[correct], ...wrong.map(m => MONTHS_NOM[m])]);
+  return {
+    key: `spm-${season.key}-${correct}`,
+    domain: 'seasons',
+    context: '',
+    prompt: `Какой месяц относится к ${season.name.toLowerCase()}?`,
+    answer: MONTHS_NOM[correct],
+    choices,
+    highlight: { month: correct, seasonKey: season.key }
+  };
+}
+
+function genMonthsInSeason() {
+  const season = pickRandom(SEASON_LIST);
+  const correct = season.months.map(m => MONTHS_NOM[m]).join(', ');
+  const wrongRanges = pickDistinct(
+    SEASON_LIST.map(s => s.months.map(m => MONTHS_NOM[m]).join(', ')),
+    3,
+    [correct]
+  );
+  const choices = shuffle([correct, ...wrongRanges]);
+  return {
+    key: `mis-${season.key}`,
+    domain: 'seasons',
+    context: '',
+    prompt: `Какие месяцы входят в ${season.name.toLowerCase()}?`,
+    answer: correct,
+    choices,
+    highlight: { seasonKey: season.key }
+  };
+}
+
+function genContextSeason() {
+  const season = pickRandom(SEASON_LIST);
+  const phrase = pickRandom(CONTEXT_PHRASES.filter(p => p.type === 'season'));
+  const wrong = pickDistinct(SEASON_LIST.map(s => s.label), 3, [season.label]);
+  const choices = shuffle([season.label, ...wrong]);
+  return {
+    key: `ctxs-${season.key}`,
+    domain: 'seasons',
+    context: phrase.template.replace('{season}', season.name.toLowerCase()),
+    prompt: 'Это какие месяцы?',
+    answer: season.label,
+    choices,
+    highlight: { seasonKey: season.key }
+  };
+}
+
+function genMonthToQuarter() {
+  const month = randInt(0, 11);
+  const qNum = getQuarterForMonth(month);
+  const correct = QUARTERS[qNum].short;
+  const wrong = pickDistinct(['Q1', 'Q2', 'Q3', 'Q4'], 3, [correct]);
+  const choices = shuffle([correct, ...wrong]);
+  return {
+    key: `mtq-${month}`,
+    domain: 'quarters',
+    context: '',
+    prompt: `В каком квартале ${MONTHS_NOM[month]}?`,
+    answer: correct,
+    choices,
+    highlight: { month, quarterNum: qNum }
+  };
+}
+
+function genQuarterMonthsSet() {
+  const q = pickRandom(Object.values(QUARTERS));
+  const wrong = pickDistinct(Object.values(QUARTERS).map(x => x.range), 3, [q.range]);
+  const choices = shuffle([q.range, ...wrong]);
+  return {
+    key: `qms-${q.num}`,
+    domain: 'quarters',
+    context: '',
+    prompt: `Какие месяцы в ${q.short}?`,
+    answer: q.range,
+    choices,
+    highlight: { quarterNum: q.num }
+  };
+}
+
+function genQuarterPickMonth() {
+  const q = pickRandom(Object.values(QUARTERS));
+  const correct = pickRandom(q.months);
+  const wrong = pickDistinct([...Array(12).keys()], 3, q.months);
+  const choices = shuffle([MONTHS_NOM[correct], ...wrong.map(m => MONTHS_NOM[m])]);
+  return {
+    key: `qpm-${q.num}-${correct}`,
+    domain: 'quarters',
+    context: '',
+    prompt: `Какой месяц входит в ${q.short}?`,
+    answer: MONTHS_NOM[correct],
+    choices,
+    highlight: { month: correct, quarterNum: q.num }
+  };
+}
+
+function genContextQuarter() {
+  const q = pickRandom(Object.values(QUARTERS));
+  const phrase = pickRandom(CONTEXT_PHRASES.filter(p => p.type === 'quarter'));
+  const wrong = pickDistinct(Object.values(QUARTERS).map(x => x.range), 3, [q.range]);
+  const choices = shuffle([q.range, ...wrong]);
+  return {
+    key: `ctxq-${q.num}`,
+    domain: 'quarters',
+    context: phrase.template.replace('{q}', q.short),
+    prompt: 'О каких месяцах речь?',
+    answer: q.range,
+    choices,
+    highlight: { quarterNum: q.num }
+  };
+}
+
+// ── MENU CONTROLS ──
+function selectTrainer(btn) {
+  document.querySelectorAll('.trainer-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedTrainer = btn.dataset.trainer;
 }
 
 function selectGameMode(btn) {
   document.querySelectorAll('.gm-btn').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
   selectedGameMode = btn.dataset.gm;
-  resetQuestionSequence();
   document.getElementById('opts-classic').style.display = selectedGameMode === 'classic' ? 'block' : 'none';
   document.getElementById('opts-timed').style.display = selectedGameMode === 'timed' ? 'block' : 'none';
-  document.getElementById('opts-survival').style.display = selectedGameMode === 'survival' ? 'block' : 'none';
 }
 
-function selectSub(mode, btn) {
+function selectSub(btn) {
   btn.closest('.sub-grid').querySelectorAll('.sub-btn').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
-  selectSubValue(mode, parseInt(btn.dataset.val));
-  resetQuestionSequence();
+  const val = parseInt(btn.dataset.val);
+  if (selectedGameMode === 'classic') classicCount = val;
+  else timedSeconds = val;
 }
 
-function selectSubValue(mode, value) {
-  if (mode === 'classic') classicCount = value;
-  if (mode === 'timed') timedSeconds = value;
-  if (mode === 'survival') survivalSeconds = value;
+function syncSettingsFromControls() {
+  const guideToggle = document.getElementById('guide-toggle');
+  const selectedTrainerBtn = document.querySelector('.trainer-btn.selected');
+  const selectedGameBtn = document.querySelector('.gm-btn.selected');
+  const activeOpts = document.getElementById('opts-' + (selectedGameBtn?.dataset.gm || selectedGameMode));
+  const selectedSub = activeOpts?.querySelector('.sub-btn.selected');
+
+  selectedTrainer = selectedTrainerBtn?.dataset.trainer || selectedTrainer;
+  selectedGameMode = selectedGameBtn?.dataset.gm || selectedGameMode;
+  showReference = guideToggle ? guideToggle.checked : showReference;
+  if (selectedSub) selectSub(selectedSub);
 }
 
-function selectInputMode(btn) {
-  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  selectedInputMode = btn.dataset.mode;
-}
-
-// ── QUESTION GEN ──
-function generateQuestion() {
-  const op = selectedOps[Math.floor(Math.random() * selectedOps.length)];
-  const { a, b, answer } = getOperandPair(op);
-  return { text: `${a} ${op} ${b}`, op, a, b, answer };
-}
-
-function getNextQuestion() {
-  if (sequenceMode === 'ordered') {
-    if (orderedQueue.length === 0) orderedQueue = buildOrderedQueue();
-    const q = orderedQueue.shift();
-    lastQuestion = q;
-    return q;
-  }
-
-  if (sequenceMode === 'ordered-first' && !orderedFirstDone) {
-    if (!orderedQueueActive) {
-      orderedQueue = buildOrderedQueue();
-      orderedQueueActive = orderedQueue.length > 0;
-    }
-    const q = orderedQueue.shift();
-    if (orderedQueue.length === 0) {
-      orderedQueueActive = false;
-      orderedFirstDone = true;
-    }
-    lastQuestion = q;
-    return q;
-  }
-
-  let q = generateQuestion();
-  let attempts = 0;
-  while (lastQuestion && isSameQuestion(q, lastQuestion) && attempts < 30) {
-    q = generateQuestion();
-    attempts++;
-  }
-  lastQuestion = q;
-  return q;
-}
-
-function buildOrderedQueue() {
-  const queue = [];
-  selectedOps.forEach(op => {
-    const fixed = selectedFocus === 'any' ? 1 : parseInt(selectedFocus);
-    for (let n = 1; n <= selectedRange; n++) {
-      const pair = getOrderedOperandPair(op, fixed, n);
-      queue.push({ text: `${pair.a} ${op} ${pair.b}`, op, a: pair.a, b: pair.b, answer: pair.answer });
-    }
+function syncControlsFromState() {
+  document.querySelectorAll('.trainer-btn').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.trainer === selectedTrainer);
   });
-  return queue;
+  document.getElementById('guide-toggle').checked = showReference;
 }
 
-function getOrderedOperandPair(op, fixed, n) {
-  if (op === '×') return { a: fixed, b: n, answer: fixed * n };
-  if (op === '÷') return { a: fixed * n, b: fixed, answer: n };
-  if (op === '+') return { a: n, b: fixed, answer: n + fixed };
-  return { a: n + fixed, b: fixed, answer: n };
+function trainerLabel(trainer) {
+  if (trainer === 'seasons') return 'сезоны';
+  if (trainer === 'quarters') return 'кварталы';
+  return 'смешанный';
 }
 
-function isSameQuestion(a, b) {
-  return !!a && !!b && a.op === b.op && a.a === b.a && a.b === b.b;
+function startTodayTraining() {
+  const trainers = ['seasons', 'quarters', 'mixed'];
+  selectedTrainer = pickRandom(trainers);
+  document.querySelectorAll('.trainer-btn').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.trainer === selectedTrainer);
+  });
+  startGame();
 }
 
-function getOperandPair(op) {
-  const fixed = selectedFocus === 'any' ? null : parseInt(selectedFocus);
-  let a, b, answer;
-
-  if (op === '×') {
-    a = fixed || randInt(1, selectedRange);
-    b = randInt(1, selectedRange);
-    answer = a * b;
-  } else if (op === '÷') {
-    b = fixed || randInt(1, selectedRange);
-    answer = randInt(1, selectedRange);
-    a = b * answer;
-  } else if (op === '+') {
-    a = randInt(1, selectedRange);
-    b = fixed || randInt(1, selectedRange);
-    answer = a + b;
-  } else {
-    b = fixed || randInt(1, selectedRange);
-    answer = randInt(0, selectedRange);
-    a = answer + b;
-  }
-
-  return { a, b, answer };
-}
-
-function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-
-function generateChoices(correct) {
-  const choices = new Set([correct]);
-  let attempts = 0;
-  while (choices.size < 4 && attempts < 120) {
-    attempts++;
-    const spread = Math.max(3, Math.floor(correct * 0.28));
-    const delta = randInt(-spread, spread);
-    const c = correct + delta;
-    if (c > 0 && c !== correct) choices.add(c);
-  }
-  let fb = 1;
-  while (choices.size < 4) { if (!choices.has(fb)) choices.add(fb); fb++; }
-  return shuffle([...choices]);
-}
-
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function renderPracticeGuide() {
-  const guide = document.getElementById('practice-guide');
-  if (!guide) return;
-
-  const rows = buildGuideRows();
-  const title = rows.title;
-  const meta = rows.limited ? `первые ${rows.items.length}` : `${rows.items.length} ответов`;
-  const buttonLabel = guideExpanded ? 'скрыть' : 'раскрыть';
-  const buttonTitle = guideExpanded ? 'Скрыть готовые ответы' : 'Показать готовые ответы';
-
-  guide.innerHTML = `
-    <div class="guide-head">
-      <div class="guide-copy">
-        <div class="guide-title">${title}</div>
-        <div class="guide-meta">${meta}</div>
-      </div>
-      <button class="guide-reveal-btn" id="guide-reveal-btn" type="button" title="${buttonTitle}">${buttonLabel}</button>
-    </div>
-    <div class="guide-list">
-      ${rows.items.map(row => {
-        const key = getGuideKey(row.left, row.answer);
-        const current = key === currentGuideKey ? ' current' : '';
-        return `<div class="guide-row${current}" data-guide-key="${key}">${row.left} = <span>${row.answer}</span></div>`;
-      }).join('')}
-    </div>
-  `;
-  guide.className = 'practice-guide show' + (guideExpanded ? '' : ' collapsed');
-
-  const revealBtn = document.getElementById('guide-reveal-btn');
-  if (revealBtn) {
-    revealBtn.addEventListener('click', () => setGuideExpanded(!guideExpanded));
-  }
-}
-
-function highlightGuideAnswer() {
-  const guide = document.getElementById('practice-guide');
-  if (!guide || !currentGuideKey) return;
-
-  guide.querySelectorAll('.guide-row.current').forEach(row => row.classList.remove('current'));
-  const current = guide.querySelector(`[data-guide-key="${currentGuideKey}"]`);
-  if (current) current.classList.add('current');
-}
-
-function getGuideKey(left, answer) {
-  return `${left}|${answer}`;
-}
-
-function buildGuideRows() {
-  if (selectedFocus === 'any') return buildContextGuideRows();
-
-  const items = [];
-  const limit = 420;
-
-  for (const op of selectedOps) {
-    const fixed = parseInt(selectedFocus);
-    for (let n = 1; n <= selectedRange; n++) {
-      items.push(formatFixedGuideRow(op, fixed, n));
-      if (items.length >= limit) return { title: `только на ${selectedFocus}`, items, limited: true };
-    }
-  }
-
-  return { title: `только на ${selectedFocus}`, items, limited: false };
-}
-
-function buildContextGuideRows() {
-  if (!currentQuestion) return { title: `таблица 1–${selectedRange}`, items: [], limited: false };
-
-  const anchor = getGuideAnchor(currentQuestion);
-  const items = [];
-  for (let n = 1; n <= selectedRange; n++) {
-    items.push(formatFixedGuideRow(currentQuestion.op, anchor, n));
-  }
-
-  return { title: `таблица на ${anchor}`, items, limited: false };
-}
-
-function getGuideAnchor(question) {
-  if (question.op === '×') return question.a;
-  return question.b;
-}
-
-function formatFixedGuideRow(op, fixed, n) {
-  if (op === '×') return { left: `${fixed} × ${n}`, answer: fixed * n };
-  if (op === '÷') return { left: `${fixed * n} ÷ ${fixed}`, answer: n };
-  if (op === '+') return { left: `${n} + ${fixed}`, answer: n + fixed };
-  return { left: `${n + fixed} − ${fixed}`, answer: n };
-}
-
-// ── START ──
+// ── GAME FLOW ──
 function startGame() {
   syncSettingsFromControls();
-  lastSettings = {
-    ops: [...selectedOps], range: selectedRange, focus: selectedFocus, showGuide: showAnswerGuide,
-    sequenceMode,
-    inputMode: selectedInputMode, gameMode: selectedGameMode,
-    classicCount, timedSeconds, survivalSeconds
-  };
+  lastSettings = { trainer: selectedTrainer, showReference, gameMode: selectedGameMode, classicCount, timedSeconds };
   correctCount = 0; wrongCount = 0; streak = 0; bestStreak = 0;
   questionNum = 0; locked = false; gameOver = false;
-  currentGuideKey = '';
+  lastQuestionKey = '';
   currentQuestion = null;
-  resetQuestionSequence();
-  guideExpanded = showAnswerGuide;
   warnedHalf = false; warnedCritical = false;
   gameStartTime = Date.now();
   sessionDateKey = formatDateKey(new Date());
   totalQuestions = selectedGameMode === 'classic' ? classicCount : Infinity;
 
+  document.getElementById('trainer-label').textContent = trainerLabel(selectedTrainer);
   showScreen('game');
-  setupInputMode();
-  renderPracticeGuide();
+  renderReferencePanel();
   setupTimer();
   nextQuestion();
 }
 
 function restartGame() {
-  selectedOps = lastSettings.ops;
-  selectedRange = lastSettings.range;
-  selectedFocus = lastSettings.focus || 'any';
-  showAnswerGuide = lastSettings.showGuide !== false;
-  sequenceMode = lastSettings.sequenceMode || 'random';
-  selectedInputMode = lastSettings.inputMode;
-  selectedGameMode = lastSettings.gameMode;
+  selectedTrainer = lastSettings.trainer || selectedTrainer;
+  showReference = lastSettings.showReference !== false;
+  selectedGameMode = lastSettings.gameMode || selectedGameMode;
   classicCount = lastSettings.classicCount || classicCount;
   timedSeconds = lastSettings.timedSeconds || timedSeconds;
-  survivalSeconds = lastSettings.survivalSeconds || survivalSeconds;
   startGame();
 }
 
-// ── TIMER ──
 function setupTimer() {
   clearInterval(timerInterval);
-  const hasClock = selectedGameMode === 'timed' || selectedGameMode === 'survival';
+  const hasClock = selectedGameMode === 'timed';
   document.getElementById('timer-row').style.display = hasClock ? 'flex' : 'none';
   document.getElementById('progress-bar').style.display = hasClock ? 'none' : 'block';
-
   if (!hasClock) return;
-
-  timerTotal = selectedGameMode === 'timed' ? timedSeconds : survivalSeconds;
+  timerTotal = timedSeconds;
   timerRemaining = timerTotal;
   renderTimer();
   timerInterval = setInterval(tickTimer, 250);
@@ -697,13 +665,10 @@ function setupTimer() {
 function tickTimer() {
   if (gameOver) { clearInterval(timerInterval); return; }
   timerRemaining = Math.max(0, timerRemaining - 0.25);
-
   const pct = timerRemaining / timerTotal;
   if (!warnedHalf && pct <= 0.5) { warnedHalf = true; playWarn(); }
   if (!warnedCritical && pct <= 0.2) { warnedCritical = true; playCritical(); }
-
   renderTimer();
-
   if (timerRemaining <= 0) {
     clearInterval(timerInterval);
     triggerTimeUp();
@@ -715,19 +680,14 @@ function renderTimer() {
   const pct = timerTotal > 0 ? timerRemaining / timerTotal : 0;
   const mins = Math.floor(secs / 60);
   const s = secs % 60;
-
   const disp = document.getElementById('timer-display');
   const bar = document.getElementById('timer-bar-fill');
-  const qc = document.getElementById('qcount-display');
-
   disp.textContent = timerTotal >= 60 ? `${mins}:${String(s).padStart(2, '0')}` : `${secs}`;
   bar.style.width = (pct * 100) + '%';
-
   const cls = pct <= 0.2 ? 'critical' : pct <= 0.5 ? 'warn' : '';
   disp.className = 'timer-display' + (cls ? ' ' + cls : '');
   bar.className = 'timer-bar-fill' + (cls ? ' ' + cls : '');
-
-  qc.textContent = `${correctCount} ✓`;
+  document.getElementById('qcount-display').textContent = `${correctCount} ✓`;
 }
 
 function triggerTimeUp() {
@@ -735,37 +695,15 @@ function triggerTimeUp() {
   gameOver = true;
   locked = true;
   playTimeUp();
-
-  const overlay = document.getElementById('timesup-overlay');
   document.getElementById('timesup-stats').textContent =
     `✓ ${correctCount}  ✗ ${wrongCount}  серия: ${bestStreak}`;
-  overlay.classList.add('show');
-
+  document.getElementById('timesup-overlay').classList.add('show');
   setTimeout(() => {
-    overlay.classList.remove('show');
+    document.getElementById('timesup-overlay').classList.remove('show');
     showScore();
   }, 1900);
 }
 
-// ── INPUT MODE ──
-function setupInputMode() {
-  document.getElementById('choices-grid').style.display = 'none';
-  document.getElementById('screen-keyboard').style.display = 'none';
-  document.getElementById('typed-display').style.display = 'none';
-  document.getElementById('keyboard-hint').style.display = 'none';
-
-  if (selectedInputMode === 'choices') {
-    document.getElementById('choices-grid').style.display = 'grid';
-  } else if (selectedInputMode === 'screen') {
-    document.getElementById('screen-keyboard').style.display = 'flex';
-    document.getElementById('typed-display').style.display = 'block';
-  } else {
-    document.getElementById('typed-display').style.display = 'block';
-    document.getElementById('keyboard-hint').style.display = 'block';
-  }
-}
-
-// ── NEXT QUESTION ──
 function nextQuestion() {
   if (gameOver) return;
   if (selectedGameMode === 'classic' && questionNum >= totalQuestions) {
@@ -774,42 +712,41 @@ function nextQuestion() {
     return;
   }
 
-  const q = getNextQuestion();
+  const q = generateQuestion();
   currentQuestion = q;
-  currentAnswer = q.answer;
-  currentGuideKey = getGuideKey(q.text, q.answer);
-  typedValue = '';
+  currentChoices = q.choices;
   locked = false;
 
-  document.getElementById('question-text').textContent = q.text;
+  const ctxEl = document.getElementById('question-context');
+  ctxEl.textContent = q.context || '';
+  ctxEl.style.display = q.context ? 'block' : 'none';
+
+  document.getElementById('question-text').textContent = q.prompt;
   document.getElementById('question-answer').textContent = '';
   document.getElementById('question-answer').className = 'question-answer';
-  document.getElementById('typed-value').textContent = '';
-  document.getElementById('typed-value').style.color = '';
 
   const qBox = document.getElementById('question-box');
   qBox.className = 'question-box';
   void qBox.offsetWidth;
   qBox.classList.add('anim-pop');
 
+  const grid = document.getElementById('choices-grid');
+  grid.classList.toggle('choices-wide', q.choices.some(c => c.length > 14));
+
+  for (let i = 0; i < 4; i++) {
+    const btn = document.getElementById('c' + i);
+    btn.textContent = currentChoices[i];
+    btn.className = 'choice-btn';
+    btn.disabled = false;
+  }
+
   if (selectedGameMode === 'classic') {
     document.getElementById('progress-fill').style.width = (questionNum / totalQuestions * 100) + '%';
   }
 
-  if (selectedInputMode === 'choices') {
-    currentChoices = generateChoices(currentAnswer);
-    for (let i = 0; i < 4; i++) {
-      const btn = document.getElementById('c' + i);
-      btn.textContent = currentChoices[i];
-      btn.className = 'choice-btn';
-      btn.disabled = false;
-    }
-  }
-
-  questionNum++;
-  renderPracticeGuide();
-  highlightGuideAnswer();
+  renderReferencePanel(q.highlight);
   updateHUD();
+  questionNum++;
 }
 
 function updateHUD() {
@@ -818,10 +755,20 @@ function updateHUD() {
   document.getElementById('score-wrong').textContent = wrongCount;
 }
 
-// ── ANSWERS ──
-function submitAnswer(userAnswer) {
+function selectChoice(idx) {
   if (locked || gameOver) return;
-  parseInt(userAnswer) === currentAnswer ? handleCorrect() : handleWrong(userAnswer);
+  const chosen = currentChoices[idx];
+  for (let i = 0; i < 4; i++) document.getElementById('c' + i).disabled = true;
+  const btn = document.getElementById('c' + idx);
+  if (chosen === currentQuestion.answer) {
+    btn.classList.add('correct-choice');
+    handleCorrect();
+  } else {
+    btn.classList.add('wrong-choice');
+    const ci = currentChoices.indexOf(currentQuestion.answer);
+    if (ci !== -1) document.getElementById('c' + ci).classList.add('correct-choice');
+    handleWrong(chosen);
+  }
 }
 
 function handleCorrect() {
@@ -831,96 +778,35 @@ function handleCorrect() {
   updateHUD();
   playCorrect();
   showFlash('correct-flash');
-
   document.getElementById('question-box').classList.add('correct');
-  if (selectedInputMode !== 'choices') document.getElementById('typed-value').textContent = currentAnswer;
   const ans = document.getElementById('question-answer');
   ans.textContent = '✓'; ans.className = 'question-answer show-correct';
-
-  setTimeout(() => nextQuestion(), 180);
+  setTimeout(() => nextQuestion(), 220);
 }
 
-function handleWrong(userAnswer) {
+function handleWrong(chosen) {
   locked = true;
   wrongCount++; streak = 0;
   updateHUD();
   playWrong();
   showFlash('wrong-flash');
-
   const qBox = document.getElementById('question-box');
-  qBox.classList.add('wrong'); void qBox.offsetWidth; qBox.classList.add('anim-shake');
-
-  if (selectedInputMode !== 'choices') {
-    const tv = document.getElementById('typed-value');
-    tv.textContent = userAnswer;
-    tv.style.color = 'var(--accent2)';
-  }
+  qBox.classList.add('wrong');
+  void qBox.offsetWidth;
+  qBox.classList.add('anim-shake');
   const ans = document.getElementById('question-answer');
-  ans.textContent = `→ ${currentAnswer}`; ans.className = 'question-answer show-wrong';
-
-  setTimeout(() => {
-    typedValue = '';
-    document.getElementById('typed-value').textContent = '';
-    document.getElementById('typed-value').style.color = '';
-    nextQuestion();
-  }, 1200);
-}
-
-function selectChoice(idx) {
-  if (locked || gameOver) return;
-  const chosen = currentChoices[idx];
-  for (let i = 0; i < 4; i++) document.getElementById('c' + i).disabled = true;
-  const btn = document.getElementById('c' + idx);
-  if (chosen === currentAnswer) {
-    btn.classList.add('correct-choice');
-    handleCorrect();
-  } else {
-    btn.classList.add('wrong-choice');
-    const ci = currentChoices.indexOf(currentAnswer);
-    if (ci !== -1) document.getElementById('c' + ci).classList.add('correct-choice');
-    handleWrong(chosen);
-  }
-}
-
-function appendDigit(d) {
-  if (locked || gameOver) return;
-  if (typedValue.length >= 5) return;
-  typedValue += d;
-  document.getElementById('typed-value').textContent = typedValue;
-}
-
-function backspace() {
-  if (locked || gameOver) return;
-  typedValue = typedValue.slice(0, -1);
-  document.getElementById('typed-value').textContent = typedValue;
-}
-
-function confirmInput() {
-  if (locked || gameOver || typedValue === '') return;
-  submitAnswer(typedValue);
-}
-
-function skPress(key) {
-  if (key === 'back') backspace();
-  else if (key === 'enter') confirmInput();
-  else appendDigit(key);
+  ans.textContent = `→ ${currentQuestion.answer}`;
+  ans.className = 'question-answer show-wrong';
+  setTimeout(() => nextQuestion(), 1100);
 }
 
 function handleFastGameButtonPress(event) {
   if (event.type === 'mousedown' && window.PointerEvent) return;
   if (event.button !== 0) return;
-
   const choiceButton = event.target.closest('.choice-btn');
   if (choiceButton) {
     event.preventDefault();
     selectChoice(parseInt(choiceButton.dataset.choiceIdx));
-    return;
-  }
-
-  const screenKey = event.target.closest('.sk-btn');
-  if (screenKey) {
-    event.preventDefault();
-    skPress(screenKey.dataset.skKey);
   }
 }
 
@@ -930,47 +816,41 @@ function showFlash(cls) {
   setTimeout(() => f.classList.remove('visible'), 140);
 }
 
-// ── QUIT / SCORE ──
 function quitGame() {
   clearInterval(timerInterval);
   gameOver = true;
-  showScore();
+  if (correctCount + wrongCount > 0) showScore();
+  else goMenu();
 }
 
 function showScore() {
   clearInterval(timerInterval);
   const elapsed = ((Date.now() - gameStartTime) / 1000).toFixed(1);
-  const answeredQ = questionNum;
+  const answered = correctCount + wrongCount;
 
   let modeLabel, subLine, timeLine = null;
-
   if (selectedGameMode === 'classic') {
-    const pct = answeredQ > 0 ? Math.round((correctCount / answeredQ) * 100) : 0;
-    modeLabel = 'классика';
-    subLine = `правильно: ${correctCount} из ${answeredQ} · ${pct}%`;
+    const pct = answered > 0 ? Math.round((correctCount / answered) * 100) : 0;
+    modeLabel = trainerLabel(selectedTrainer);
+    subLine = `правильно: ${correctCount} из ${answered} · ${pct}%`;
     timeLine = `время: ${elapsed} сек`;
-  } else if (selectedGameMode === 'timed') {
-    modeLabel = 'на время';
-    subLine = `вопросов: ${answeredQ} · правильно: ${correctCount} · ошибок: ${wrongCount}`;
   } else {
-    modeLabel = 'выживание';
-    subLine = `правильно: ${correctCount} · ошибок: ${wrongCount} · вопросов: ${answeredQ}`;
+    modeLabel = trainerLabel(selectedTrainer) + ' · на время';
+    subLine = `вопросов: ${answered} · правильно: ${correctCount} · ошибок: ${wrongCount}`;
   }
 
   recordSession({
+    trainer: selectedTrainer,
     gameMode: selectedGameMode,
     correct: correctCount,
     wrong: wrongCount,
-    answered: answeredQ,
+    answered,
     bestStreak,
-    elapsedSec: parseFloat(elapsed),
-    ops: [...selectedOps]
+    elapsedSec: parseFloat(elapsed)
   });
 
   const sessionDate = parseDateKey(sessionDateKey || formatDateKey(new Date()));
-  const season = getSeasonForDate(sessionDate);
   applySeasonTheme(sessionDate);
-
   const dailyStreak = calculateDailyStreak(sessionDate);
 
   document.getElementById('score-mode-label').textContent = modeLabel;
@@ -978,7 +858,7 @@ function showScore() {
   document.getElementById('final-sub').textContent = subLine;
   document.getElementById('final-streak').textContent = `лучшая серия: ${bestStreak}`;
   document.getElementById('final-daily-streak').textContent =
-    `серия дней: ${dailyStreak} ${pluralDays(dailyStreak)} ${season.icon}`;
+    `серия дней: ${dailyStreak} ${pluralDays(dailyStreak)}`;
   document.getElementById('final-date').textContent =
     `${WEEKDAYS[sessionDate.getDay()]}, ${formatFullDate(sessionDate)}`;
 
@@ -1000,61 +880,30 @@ function showScreen(name) {
   document.getElementById('screen-' + name).classList.add('active');
 }
 
-// ── EVENT BINDINGS ──
-function bindMenuEvents() {
-  document.querySelectorAll('.op-btn').forEach(btn => {
-    btn.addEventListener('click', () => toggleOp(btn));
+// ── EVENTS ──
+function bindEvents() {
+  document.querySelectorAll('.trainer-btn').forEach(btn => {
+    btn.addEventListener('click', () => selectTrainer(btn));
   });
-
-  document.getElementById('range-select').addEventListener('change', e => selectRange(e.target));
-  document.getElementById('focus-select').addEventListener('change', e => selectFocus(e.target));
-  document.getElementById('guide-toggle').addEventListener('change', e => toggleGuide(e.target));
-  document.getElementById('sequence-mode-select').addEventListener('change', e => selectSequenceMode(e.target));
-
   document.querySelectorAll('.gm-btn').forEach(btn => {
     btn.addEventListener('click', () => selectGameMode(btn));
   });
-
   document.querySelectorAll('.sub-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const parent = btn.closest('.mode-options');
-      const mode = parent.id.replace('opts-', '');
-      selectSub(mode, btn);
-    });
+    btn.addEventListener('click', () => selectSub(btn));
   });
-
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => selectInputMode(btn));
+  document.getElementById('guide-toggle').addEventListener('change', e => {
+    showReference = e.target.checked;
   });
-
   document.getElementById('start-btn').addEventListener('click', startGame);
   document.getElementById('today-start-btn').addEventListener('click', startTodayTraining);
   document.getElementById('quit-btn').addEventListener('click', quitGame);
   document.getElementById('menu-btn').addEventListener('click', goMenu);
   document.getElementById('restart-btn').addEventListener('click', restartGame);
+
+  const grid = document.getElementById('choices-grid');
+  grid.addEventListener('pointerdown', handleFastGameButtonPress);
+  grid.addEventListener('mousedown', handleFastGameButtonPress);
 }
 
-function bindGameEvents() {
-  const choicesGrid = document.getElementById('choices-grid');
-  const screenKeyboard = document.getElementById('screen-keyboard');
-
-  choicesGrid.addEventListener('pointerdown', handleFastGameButtonPress);
-  screenKeyboard.addEventListener('pointerdown', handleFastGameButtonPress);
-  choicesGrid.addEventListener('mousedown', handleFastGameButtonPress);
-  screenKeyboard.addEventListener('mousedown', handleFastGameButtonPress);
-
-  document.addEventListener('keydown', e => {
-    if (!document.getElementById('screen-game').classList.contains('active')) return;
-    if (selectedInputMode === 'keyboard' || selectedInputMode === 'screen') {
-      if (e.key >= '0' && e.key <= '9') { e.preventDefault(); appendDigit(e.key); }
-      else if (e.key === 'Backspace') backspace();
-      else if (e.key === 'Enter') confirmInput();
-    }
-  });
-}
-
-// ── INIT ──
-updateFocusOptions();
-bindMenuEvents();
-bindGameEvents();
+bindEvents();
 renderTodayBlock();
